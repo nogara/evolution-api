@@ -38,6 +38,7 @@ orbit, canal-whatsapp (alien) and stenfar.
 - [x] T2 Skills — 453773b2, c2aa1dd5
 - [x] T3 Tooling/CI — f2718917
 - [x] T4 Integrate and verify — merge f81c78e0
+- [x] T5 Fix the 10 non-blocking review findings (tsc/eslint gate paths untested: no node_modules)
 
 ## Acceptance criteria
 

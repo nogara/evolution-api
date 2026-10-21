@@ -16,9 +16,11 @@ description: >
 - Source of truth: `VERSION` file at repo root, single line `X.Y.Z`. First release `0.1.0`.
 - Git tag: `vX.Y.Z` (annotated), must equal `VERSION`. Upstream tags look like `2.3.7` (no `v`) —
   never create or move those.
-- Image: `ghcr.io/purple-dice/evolution-in-purple:X.Y.Z` (plus `latest` only for the newest
-  release). The upstream workflows under `.github/workflows/publish_docker_image*.yml` push to
-  `evoapicloud/evolution-api`; the fork publish workflow is owned by tooling, not by this skill.
+- Image: `.github/workflows/publish_docker_image.yml` runs on pushed `v*` tags and publishes
+  `ghcr.io/purple-dice/evolution-in-purple:X.Y.Z` and `:X.Y` (metadata-action semver patterns
+  `{{version}}` and `{{major}}.{{minor}}`). No `latest` tag is published.
+  `publish_docker_image_latest.yml` and `publish_docker_image_homolog.yml` are disabled
+  `workflow_dispatch` no-op stubs (upstream pushed to Docker Hub `evoapicloud/evolution-api`).
 
 ### Bump rules (pre-1.0)
 
@@ -40,16 +42,16 @@ After `1.0.0`, standard SemVer (breaking ⇒ MAJOR).
 ### Breaking
 - <change> — consumers affected: orbit | canal-whatsapp | stenfar; migration: <note>
 
-### Features / Fixes / Backports
+### Features / Fixes / Backports / Chores
 - <change> (upstream evolution-foundation/evolution-api#<PR>, <sha>) when backported
 
----
+# Upstream Evolution API changelog
 
 # 2.3.7 (2025-12-05)   ← upstream history, untouched below
 ```
 
-The upstream history (currently starting at `CHANGELOG.md:1` with `# 2.3.7 (2025-12-05)`) is
-never edited.
+New fork releases go at the top of the `# evolution-in-purple` section (newest first). Everything
+below the `# Upstream Evolution API changelog` heading is upstream history and is never edited.
 
 ## Procedure
 

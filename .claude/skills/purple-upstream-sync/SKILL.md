@@ -17,11 +17,14 @@ rebase onto upstream; it imports selected commits only.
 
 ```bash
 git remote -v   # upstream must exist
+# if missing or pointing elsewhere (e.g. the old EvolutionAPI org):
+git remote add upstream https://github.com/evolution-foundation/evolution-api.git \
+  || git remote set-url upstream https://github.com/evolution-foundation/evolution-api.git
 git fetch upstream --tags
 ```
 
 `upstream` must point to `https://github.com/evolution-foundation/evolution-api.git`
-(`evolution-foundation/evolution-api` is the old org name and only redirects). Never push to upstream.
+(`EvolutionAPI/evolution-api` is the old org name and only redirects). Never push to upstream.
 
 ## Procedure (one backport = one branch = one PR)
 

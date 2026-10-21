@@ -22,7 +22,7 @@ and **stenfar**. Anything they consume is a public contract.
 | `src/api/integrations/event/` | Webhook, WebSocket, RabbitMQ, SQS, NATS, Kafka, Pusher |
 | `src/api/integrations/storage/` | S3 / MinIO |
 | `src/config/`, `src/cache/`, `src/utils/`, `src/exceptions/` | Env config, Redis/local cache, helpers, HTTP exceptions |
-| `prisma/` | `postgresql-schema.prisma` / `mysql-schema.prisma` + provider-specific migration folders |
+| `prisma/` | Three schemas (`postgresql-schema.prisma`, `mysql-schema.prisma`, `psql_bouncer-schema.prisma`) + `postgresql-migrations/` and `mysql-migrations/` |
 | `odd/` | Active feature docs (`odd/tasks/`), closed ones (`odd/archive/`), `odd/agent-protocol.md` |
 | `.claude/skills/purple-*` | Project skills (shared with Pi via `.pi/settings.json`) |
 | `VERSION`, `CHANGELOG.md` | Fork versioning, managed by the `purple-release` skill |
