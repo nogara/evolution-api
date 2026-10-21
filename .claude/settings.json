@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__plugin_engram_engram__mem_search",
+      "mcp__plugin_engram_engram__mem_get_observation",
+      "mcp__plugin_engram_engram__mem_save",
+      "mcp__plugin_engram_engram__mem_context",
+      "mcp__plugin_engram_engram__mem_session_summary"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/git-gate.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "F=$(jq -r '.tool_input.file_path // empty'); [ -z \"$F\" ] && exit 0; case \"$F\" in *.ts|*.js|*.json|*.md) (cd \"$CLAUDE_PROJECT_DIR\" && npx --no prettier --config .prettierrc.js --write --log-level=silent \"$F\" >/dev/null 2>&1) || true ;; esac; exit 0"
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,355 +1,204 @@
-# Evolution API - AI Agent Guidelines
+# AGENTS.md
 
-This document provides comprehensive guidelines for AI agents (Claude, GPT, Cursor, etc.) working with the Evolution API codebase.
+Canonical index for `purple-dice/evolution-in-purple`, a fork of Evolution API 2.3.7 (TypeScript, Express,
+Prisma, Baileys 7.0.0-rc.9). Read by Pi (gentle-ai) and Claude Code; `CLAUDE.md` only points here. Detailed
+patterns live in the skills under `.claude/skills/`, loaded on demand.
 
-## Project Overview
+This engine replaces Evolution API for three consumer products: **orbit**, **canal-whatsapp** (a.k.a. alien)
+and **stenfar**. Anything they consume is a public contract.
 
-**Evolution API** is a production-ready, multi-tenant WhatsApp API platform built with Node.js, TypeScript, and Express.js. It supports multiple WhatsApp providers and extensive integrations with chatbots, CRM systems, and messaging platforms.
+## Repo map
 
-## Project Structure & Module Organization
+| Path | Content |
+| --- | --- |
+| `src/main.ts` | Bootstrap (Express server, routers, monitors) |
+| `src/api/controllers/` | HTTP handlers (thin layer) |
+| `src/api/services/` | Business logic; `monitor.service.ts` owns the WhatsApp instance registry |
+| `src/api/routes/` | Express routes (`RouterBroker` pattern) |
+| `src/api/guards/` | API-key auth and instance resolution (security-critical) |
+| `src/api/dto/`, `src/validate/` | Plain-class DTOs and JSONSchema7 validation |
+| `src/api/integrations/channel/` | WhatsApp providers: Baileys (`whatsapp/`), Meta Business API (`meta/`), `evolution/` |
+| `src/api/integrations/chatbot/` | Chatwoot, Typebot, OpenAI, Dify, Flowise, N8N, EvoAI, EvolutionBot |
+| `src/api/integrations/event/` | Webhook, WebSocket, RabbitMQ, SQS, NATS, Kafka, Pusher |
+| `src/api/integrations/storage/` | S3 / MinIO |
+| `src/config/`, `src/cache/`, `src/utils/`, `src/exceptions/` | Env config, Redis/local cache, helpers, HTTP exceptions |
+| `prisma/` | Three schemas (`postgresql-schema.prisma`, `mysql-schema.prisma`, `psql_bouncer-schema.prisma`) + `postgresql-migrations/` and `mysql-migrations/` |
+| `odd/` | Active feature docs (`odd/tasks/`), closed ones (`odd/archive/`), `odd/agent-protocol.md` |
+| `.claude/skills/purple-*` | Project skills (shared with Pi via `.pi/settings.json`) |
+| `VERSION`, `CHANGELOG.md` | Fork versioning, managed by the `purple-release` skill |
+| `dist/` | Build output — never edit |
 
-### Core Directories
-- **`src/`** – TypeScript source code with modular architecture
-  - `api/controllers/` – HTTP route handlers (thin layer)
-  - `api/services/` – Business logic (core functionality)
-  - `api/routes/` – Express route definitions (RouterBroker pattern)
-  - `api/integrations/` – External service integrations
-    - `channel/` – WhatsApp providers (Baileys, Business API, Evolution)
-    - `chatbot/` – AI/Bot integrations (OpenAI, Dify, Typebot, Chatwoot)
-    - `event/` – Event systems (WebSocket, RabbitMQ, SQS, NATS, Pusher)
-    - `storage/` – File storage (S3, MinIO)
-  - `dto/` – Data Transfer Objects (simple classes, no decorators)
-  - `guards/` – Authentication/authorization middleware
-  - `types/` – TypeScript type definitions
-  - `repository/` – Data access layer (Prisma)
-- **`prisma/`** – Database schemas and migrations
-  - `postgresql-schema.prisma` / `mysql-schema.prisma` – Provider-specific schemas
-  - `postgresql-migrations/` / `mysql-migrations/` – Provider-specific migrations
-- **`config/`** – Environment and application configuration
-- **`utils/`** – Shared utilities and helper functions
-- **`validate/`** – JSONSchema7 validation schemas
-- **`exceptions/`** – Custom HTTP exception classes
-- **`cache/`** – Redis and local cache implementations
+## Commands & danger zones
 
-### Build & Deployment
-- **`dist/`** – Build output (do not edit directly)
-- **`public/`** – Static assets and media files
-- **`Docker*`**, **`docker-compose*.yaml`** – Containerization and local development stack
+- **Local / safe:** `npm run dev:server` (tsx watch), `npm start`, `npm run build` (`tsc --noEmit && tsup`),
+  `npm run lint:check`, `npx tsc --noEmit`, `make check-docs`, `npm run db:generate`,
+  `docker-compose -f docker-compose.dev.yaml up -d`.
+- **Database:** always `export DATABASE_PROVIDER=postgresql` (or `mysql`) first. `npm run db:migrate:dev`
+  only against a local database. Every schema change ships migrations for BOTH providers.
+- **PROD — never without explicit user approval:** `npm run db:deploy`, image publish workflows, any deploy,
+  release tag, or push to a shared environment.
+- `npm run lint` auto-fixes files; prefer `lint:check` when verifying.
 
-## Build, Test, and Development Commands
+## Commits
 
-### Development Workflow
+- Conventional Commits (enforced by commitlint), English, subject <= 100 chars.
+- Tests and docs travel in the same commit as the behavior they cover.
+- Husky runs `lint-staged` on pre-commit and `build` + `lint:check` on pre-push. Never `--no-verify`.
+- No `Co-Authored-By` or AI attribution.
+- The parent agent commits; subagents never commit (`odd/agent-protocol.md` §2).
+- Push, PR and merge are user decisions. Releases only via the `purple-release` skill.
+
+## Hard rules
+
+### (a) Consumer contract
+
+Webhook payloads (event names, field names, shapes) and REST routes (paths, params, response shapes)
+consumed by orbit, canal-whatsapp or stenfar MUST NOT break without versioning and a `CHANGELOG.md` note.
+Adding optional fields is fine; renaming, removing, retyping or changing semantics is a breaking change.
+Procedure: skill `purple-contract`.
+
+### (b) Upstream sync
+
+- We cherry-pick from `evolution-foundation/evolution-api` (git remote `upstream`); we never merge it wholesale.
+- NEVER import license activation, telemetry or EvoHub code.
+- Record the source PR number and/or upstream sha in the commit body (e.g. `Upstream: #1234 / abc1234`).
+- Procedure: skill `purple-upstream-sync`.
+
+### (c) Multi-instance isolation
+
+Several clients share one server. Every operation is scoped by `instanceName` / `instanceId`; every Prisma
+query on tenant data includes `where: { instanceId }`. A request authenticated for one instance must never
+read or mutate another. Changes to auth guards, API-key handling or instance resolution are
+**security-critical**: call them out in the PR and get explicit review.
+
+### (d) WhatsApp JIDs
+
+Preserve `@lid` addressing end to end. Never strip a JID with `split('@')[0]` (or equivalent) to build an
+outbound target — that turns a `@lid` into a bogus phone number and the message goes nowhere or to the wrong
+user. Normalize only through the existing JID helpers. Detail: skill `purple-baileys`.
+
+## Skills per task
+
+Read the matching skill BEFORE writing code. Skills live in `.claude/skills/<name>/SKILL.md`.
+
+| Task | Skills |
+| --- | --- |
+| Any TypeScript change in `src/` | `purple-typescript` |
+| Baileys channel, JIDs, connection/session, message send/receive | `purple-baileys` + `purple-typescript` |
+| Webhook payload, event, REST route or DTO consumed externally | `purple-contract` + `purple-typescript` |
+| Cherry-picking / porting from upstream | `purple-upstream-sync` |
+| Version bump, `CHANGELOG.md`, image publish | `purple-release` |
+
+## How this repo fits ODD
+
+ODD (gentle-ai) is the workflow; its protocol is not repeated here. What this repo adds:
+
+- **Feature docs:** each feature lives in `odd/tasks/<feature>.md` (objective, scope, checklist, acceptance
+  criteria, evidence with commit ids). Closed features move to `odd/archive/`.
+- **Operational rules** for agents and parents: `odd/agent-protocol.md`.
+- **Contract first:** if a change touches anything a consumer reads, the first task states the contract
+  change (skill `purple-contract`).
+
+## CodeGraph — ordering rule
+
+- Structural questions (map, call flow, references, impact) are answered with CodeGraph **before** any
+  `grep`/`find`. Read-only commands only: `status`, `query`, `explore`, `context`, `node`, `files`,
+  `callers`, `callees`, `impact`, `affected`.
+- Each worktree has its own `.codegraph/` index. `index` only to recover a corrupt index.
+- Fall back to `grep`/`find`/`read` only if CodeGraph fails, and say so explicitly.
+
+## Verification
+
+There is no test suite yet (`npm test` is an upstream placeholder). Before handing off a change, run:
+
 ```bash
-# Development server with hot reload
-npm run dev:server
-
-# Direct execution for testing
-npm start
-
-# Production build and run
+npx tsc --noEmit
 npm run build
-npm run start:prod
+npm run lint:check
+make check-docs      # docs drift guard (pointers, skill frontmatter)
 ```
 
-### Code Quality
-```bash
-# Linting and formatting
-npm run lint        # ESLint with auto-fix
-npm run lint:check  # ESLint check only
+Behavior that needs a real WhatsApp account (pairing, sending, receiving) requires a human with a phone;
+report it as unverified rather than faking it. When tests are added, they ship with the behavior.
 
-# Commit with conventional commits
-npm run commit      # Interactive commit with Commitizen
-```
+## Documentation conventions
 
-### Database Management
-```bash
-# Set database provider first (CRITICAL)
-export DATABASE_PROVIDER=postgresql  # or mysql
+1. This file is an index: hard rules + pointers. Implementation detail goes to skills.
+2. Whoever changes behavior updates the affected skill or this index in the same commit.
+3. Changes to the hard rules are decided by the user.
+4. Run `make check-docs` before committing doc changes.
 
-# Generate Prisma client
-npm run db:generate
+## Codebase reference
 
-# Development migrations (with provider sync)
-npm run db:migrate:dev      # Unix/Mac
-npm run db:migrate:dev:win  # Windows
+Condensed from the upstream Evolution API guidelines.
 
-# Production deployment
-npm run db:deploy      # Unix/Mac
-npm run db:deploy:win  # Windows
+### Architecture
 
-# Database tools
-npm run db:studio      # Open Prisma Studio
-```
+- **Multi-provider DB:** PostgreSQL (`@db.Integer`, `@db.JsonB`) and MySQL (`@db.Int`, `@db.Json`) via Prisma,
+  provider chosen by `DATABASE_PROVIDER`; `runWithProvider.js` substitutes it into schema/migration paths.
+- **Events:** EventEmitter2 internally; external delivery via webhook (with retry), WebSocket, RabbitMQ, SQS,
+  NATS, Kafka, Pusher. All go through `event.manager.ts`.
+- **Cache:** Redis primary, node-cache fallback; set explicit TTLs and invalidate on writes.
+- **Instances:** `WAMonitoringService.waInstances[instanceName]` holds live channel services; one WhatsApp
+  connection per instance with lifecycle management.
+- **Media:** stored in S3/MinIO when enabled; otherwise inline base64.
 
-### Docker Development
-```bash
-# Start local services (Redis, PostgreSQL, etc.)
-docker-compose up -d
+### Patterns
 
-# Full development stack
-docker-compose -f docker-compose.dev.yaml up -d
-```
-
-## Coding Standards & Architecture Patterns
-
-### Code Style (Enforced by ESLint + Prettier)
-- **TypeScript strict mode** with full type coverage
-- **2-space indentation**, single quotes, trailing commas
-- **120-character line limit**
-- **Import order** via `simple-import-sort`
-- **File naming**: `feature.kind.ts` (e.g., `whatsapp.baileys.service.ts`)
-- **Naming conventions**:
-  - Classes: `PascalCase`
-  - Functions/variables: `camelCase`
-  - Constants: `UPPER_SNAKE_CASE`
-  - Files: `kebab-case.type.ts`
-
-### Architecture Patterns
-
-#### Service Layer Pattern
 ```typescript
+// Service: business logic, Evolution returns null on not-found
 export class ExampleService {
   constructor(private readonly waMonitor: WAMonitoringService) {}
-  
   private readonly logger = new Logger('ExampleService');
-  
-  public async create(instance: InstanceDto, data: ExampleDto) {
-    // Business logic here
-    return { example: { ...instance, data } };
-  }
-  
+
   public async find(instance: InstanceDto): Promise<ExampleDto | null> {
     try {
-      const result = await this.waMonitor.waInstances[instance.instanceName].findData();
-      return result || null; // Return null on not found (Evolution pattern)
+      return (await this.waMonitor.waInstances[instance.instanceName].findData()) || null;
     } catch (error) {
       this.logger.error('Error finding data:', error);
-      return null; // Return null on error (Evolution pattern)
+      return null;
     }
   }
 }
-```
 
-#### Controller Pattern (Thin Layer)
-```typescript
+// Controller: thin pass-through
 export class ExampleController {
   constructor(private readonly exampleService: ExampleService) {}
-  
-  public async createExample(instance: InstanceDto, data: ExampleDto) {
-    return this.exampleService.create(instance, data);
+  public async find(instance: InstanceDto) {
+    return this.exampleService.find(instance);
   }
 }
-```
 
-#### RouterBroker Pattern
-```typescript
-export class ExampleRouter extends RouterBroker {
-  constructor(...guards: any[]) {
-    super();
-    this.router.post(this.routerPath('create'), ...guards, async (req, res) => {
-      const response = await this.dataValidate<ExampleDto>({
-        request: req,
-        schema: exampleSchema, // JSONSchema7
-        ClassRef: ExampleDto,
-        execute: (instance, data) => controller.createExample(instance, data),
-      });
-      res.status(201).json(response);
-    });
-  }
-}
-```
-
-#### DTO Pattern (Simple Classes)
-```typescript
-// CORRECT - Evolution API pattern (no decorators)
-export class ExampleDto {
-  name: string;
-  description?: string;
-  enabled: boolean;
-}
-
-// INCORRECT - Don't use class-validator decorators
-export class BadExampleDto {
-  @IsString() // ❌ Evolution API doesn't use decorators
-  name: string;
-}
-```
-
-#### Validation Pattern (JSONSchema7)
-```typescript
-import { JSONSchema7 } from 'json-schema';
-import { v4 } from 'uuid';
-
-export const exampleSchema: JSONSchema7 = {
-  $id: v4(),
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    description: { type: 'string' },
-    enabled: { type: 'boolean' },
-  },
-  required: ['name', 'enabled'],
-};
-```
-
-## Multi-Tenant Architecture
-
-### Instance Isolation
-- **CRITICAL**: All operations must be scoped by `instanceName` or `instanceId`
-- **Database queries**: Always include `where: { instanceId: ... }`
-- **Authentication**: Validate instance ownership before operations
-- **Data isolation**: Complete separation between tenant instances
-
-### WhatsApp Instance Management
-```typescript
-// Access instance via WAMonitoringService
-const waInstance = this.waMonitor.waInstances[instance.instanceName];
-if (!waInstance) {
-  throw new NotFoundException(`Instance ${instance.instanceName} not found`);
-}
-```
-
-## Database Patterns
-
-### Multi-Provider Support
-- **PostgreSQL**: Uses `@db.Integer`, `@db.JsonB`, `@default(now())`
-- **MySQL**: Uses `@db.Int`, `@db.Json`, `@default(now())`
-- **Environment**: Set `DATABASE_PROVIDER=postgresql` or `mysql`
-- **Migrations**: Provider-specific folders auto-selected
-
-### Prisma Repository Pattern
-```typescript
-// Always use PrismaRepository for database operations
-const result = await this.prismaRepository.instance.findUnique({
-  where: { name: instanceName },
-});
-```
-
-## Integration Patterns
-
-### Channel Integration (WhatsApp Providers)
-- **Baileys**: WhatsApp Web with QR code authentication
-- **Business API**: Official Meta WhatsApp Business API  
-- **Evolution API**: Custom WhatsApp integration
-- **Pattern**: Extend base channel service classes
-
-### Chatbot Integration
-- **Base classes**: Extend `BaseChatbotService` and `BaseChatbotController`
-- **Trigger system**: Support keyword, regex, and advanced triggers
-- **Session management**: Handle conversation state per user
-- **Available integrations**: EvolutionBot, OpenAI, Dify, Typebot, Chatwoot, Flowise, N8N, EvoAI
-
-### Event Integration
-- **Internal events**: EventEmitter2 for application events
-- **External events**: WebSocket, RabbitMQ, SQS, NATS, Pusher
-- **Webhook delivery**: Reliable delivery with retry logic
-
-## Testing Guidelines
-
-### Current State
-- **No formal test suite** currently implemented
-- **Manual testing** is the primary approach
-- **Integration testing** in development environment
-
-### Testing Strategy
-```typescript
-// Place tests in test/ directory as *.test.ts
-// Run: npm test (watches test/all.test.ts)
-
-describe('ExampleService', () => {
-  it('should create example', async () => {
-    // Mock external dependencies
-    // Test business logic
-    // Assert expected behavior
+// Router: RouterBroker + JSONSchema7 validation
+this.router.post(this.routerPath('create'), ...guards, async (req, res) => {
+  const response = await this.dataValidate<ExampleDto>({
+    request: req,
+    schema: exampleSchema,
+    ClassRef: ExampleDto,
+    execute: (instance, data) => controller.create(instance, data),
   });
+  res.status(201).json(response);
 });
 ```
 
-### Recommended Approach
-- Focus on **critical business logic** in services
-- **Mock external dependencies** (WhatsApp APIs, databases)
-- **Integration tests** for API endpoints
-- **Manual testing** for WhatsApp connection flows
+- **DTOs** are plain classes — no `class-validator` decorators. Validation is JSONSchema7 in `src/validate/`
+  (`$id: v4()`, explicit `required`).
+- **Instance lookup:** throw `NotFoundException` when `waMonitor.waInstances[name]` is missing.
+- **Chatbots** extend `BaseChatbotService` / `BaseChatbotController` (keyword, regex, advanced triggers;
+  per-contact sessions).
+- **Channels** extend the base channel service; keep provider-specific logic inside its folder.
 
-## Commit & Pull Request Guidelines
+### Code style
 
-### Conventional Commits (Enforced by commitlint)
-```bash
-# Use interactive commit tool
-npm run commit
+- TypeScript strict, 2-space indent, single quotes, trailing commas, 120-char lines, `simple-import-sort`.
+- Files `feature.kind.ts` (e.g. `whatsapp.baileys.service.ts`); classes `PascalCase`, functions/variables
+  `camelCase`, constants `UPPER_SNAKE_CASE`.
+- Logging via the project `Logger` (Pino); never log API keys or tokens.
+- Code, comments, API responses and docs in English.
 
-# Commit format: type(scope): subject (max 100 chars)
-# Types: feat, fix, docs, style, refactor, perf, test, chore, ci, build, revert, security
-```
+### Environment
 
-### Examples
-- `feat(api): add WhatsApp message status endpoint`
-- `fix(baileys): resolve connection timeout issue`
-- `docs(readme): update installation instructions`
-- `refactor(service): extract common message validation logic`
-
-### Pull Request Requirements
-- **Clear description** of changes and motivation
-- **Linked issues** if applicable
-- **Migration impact** (specify database provider)
-- **Local testing steps** with screenshots/logs
-- **Breaking changes** clearly documented
-
-## Security & Configuration
-
-### Environment Setup
-```bash
-# Copy example environment file
-cp .env.example .env
-
-# NEVER commit secrets to version control
-# Set DATABASE_PROVIDER before database commands
-export DATABASE_PROVIDER=postgresql  # or mysql
-```
-
-### Security Best Practices
-- **API key authentication** via `apikey` header
-- **Input validation** with JSONSchema7
-- **Rate limiting** on all endpoints
-- **Webhook signature validation**
-- **Instance-based access control**
-- **Secure defaults** for all configurations
-
-### Vulnerability Reporting
-- See `SECURITY.md` for security vulnerability reporting process
-- Contact: `contato@evolution-api.com`
-
-## Communication Standards
-
-### Language Requirements
-- **User communication**: Always respond in Portuguese (PT-BR)
-- **Code/comments**: English for technical documentation
-- **API responses**: English for consistency
-- **Error messages**: Portuguese for user-facing errors
-
-### Documentation Standards
-- **Inline comments**: Document complex business logic
-- **API documentation**: Document all public endpoints
-- **Integration guides**: Document new integration patterns
-- **Migration guides**: Document database schema changes
-
-## Performance & Scalability
-
-### Caching Strategy
-- **Redis primary**: Distributed caching for production
-- **Node-cache fallback**: Local caching when Redis unavailable
-- **TTL strategy**: Appropriate cache expiration per data type
-- **Cache invalidation**: Proper invalidation on data changes
-
-### Connection Management
-- **Database**: Prisma connection pooling
-- **WhatsApp**: One connection per instance with lifecycle management
-- **Redis**: Connection pooling and retry logic
-- **External APIs**: Rate limiting and retry with exponential backoff
-
-### Monitoring & Observability
-- **Structured logging**: Pino logger with correlation IDs
-- **Error tracking**: Comprehensive error scenarios
-- **Health checks**: Instance status and connection monitoring
-- **Telemetry**: Usage analytics (non-sensitive data only)
-
+- Copy `.env.example` to `.env` locally; never commit secrets.
+- Key settings: `DATABASE_PROVIDER`, `DATABASE_CONNECTION_URI`, `AUTHENTICATION_API_KEY`, `CACHE_REDIS_*`,
+  `WEBHOOK_*`, `S3_*`. See `src/config/env.config.ts` for the full list.
+- Security reports: `SECURITY.md`.
