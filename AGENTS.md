@@ -94,7 +94,9 @@ Read the matching skill BEFORE writing code. Skills live in `.claude/skills/<nam
 ODD (gentle-ai) is the workflow; its protocol is not repeated here. What this repo adds:
 
 - **Feature docs:** each feature lives in `odd/tasks/<feature>.md` (objective, scope, checklist, acceptance
-  criteria, evidence with commit ids). Closed features move to `odd/archive/`.
+  criteria, evidence with commit ids). Closed features move to `odd/archive/`. Both folders are gitignored:
+  this repo is public, so feature docs stay local and unfixed security findings never go into commits,
+  PR descriptions or issues.
 - **Operational rules** for agents and parents: `odd/agent-protocol.md`.
 - **Contract first:** if a change touches anything a consumer reads, the first task states the contract
   change (skill `purple-contract`).

@@ -46,3 +46,7 @@ lerna-debug.log*
 .tool-versions
 
 /prisma/migrations/*
+
+# ODD feature docs are local working notes (public repo)
+odd/tasks/
+odd/archive/
