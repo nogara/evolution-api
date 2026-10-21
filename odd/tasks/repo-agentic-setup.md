@@ -34,10 +34,10 @@ orbit, canal-whatsapp (alien) and stenfar.
 
 ## Checklist
 
-- [ ] T1 Core docs
-- [ ] T2 Skills
-- [ ] T3 Tooling/CI
-- [ ] T4 Integrate and verify
+- [x] T1 Core docs — 901c00df
+- [x] T2 Skills — 453773b2, c2aa1dd5
+- [x] T3 Tooling/CI — f2718917
+- [x] T4 Integrate and verify — merge f81c78e0
 
 ## Acceptance criteria
 
@@ -48,4 +48,13 @@ orbit, canal-whatsapp (alien) and stenfar.
 
 ## Evidence
 
-(commit ids recorded per task)
+- `bash scripts/check-docs.sh` → `check-docs: OK` after integration.
+- `npm run build` / `lint:check` not run: no `src/` changes and `node_modules` not installed.
+- Engram mirror `odd/repo-agentic-setup/tasks` failed (server requires upgrade).
+
+## Follow-ups
+
+- canal-whatsapp calls `GET /group/findGroupByJid`, which does not exist in 2.3.7 (see purple-contract consumer matrix).
+- Confirm whether `/instance/create` honors the `webhook` field (orbit relies on it; canal comment says it does not).
+- Locate where stenfar registers its webhook.
+- Decide whether to delete disabled upstream publish workflows and `check_code_quality.yml`; update `.husky/README.md`.
