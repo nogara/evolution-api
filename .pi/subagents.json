@@ -1,0 +1,22 @@
+{
+  "kind": "gentle-pi.agent-model-config",
+  "version": 1,
+  "model_profiles": {
+    "review-risk": {
+      "model": "nan/mimo-v2.6-flash",
+      "effort": "medium"
+    },
+    "review-resilience": {
+      "model": "nan/glm5.3-flash",
+      "effort": "low"
+    },
+    "review-readability": {
+      "model": "nan/glm5.3-flash",
+      "effort": "low"
+    },
+    "review-reliability": {
+      "model": "nan/glm5.3-flash",
+      "effort": "low"
+    }
+  }
+}
