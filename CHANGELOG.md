@@ -1,3 +1,14 @@
+# evolution-in-purple
+
+## 0.1.0 (Unreleased)
+
+### Chores
+
+* Fork baseline from Evolution API 2.3.7
+* Agentic setup: AGENTS.md, Claude skills and hooks, docs drift check, Makefile, fork CI (`purple-checks.yml`) and GHCR publishing on `v*` tags
+
+# Upstream Evolution API changelog
+
 # 2.3.7 (2025-12-05)
 
 ### Features

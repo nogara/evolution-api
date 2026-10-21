@@ -1,1 +1,6 @@
 npx lint-staged
+
+# Docs drift guard: only when agent docs/tooling are staged.
+if git diff --cached --name-only | grep -qE '^(AGENTS\.md|CLAUDE\.md|Makefile|\.claude/|\.pi/|odd/)'; then
+  bash scripts/check-docs.sh
+fi
