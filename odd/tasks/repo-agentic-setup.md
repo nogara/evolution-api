@@ -69,3 +69,14 @@ Non-blocking findings (follow-up work):
 - purple-release: stale workflow and `latest` tag references; CHANGELOG layout drift.
 - purple-upstream-sync: upstream remote wording contradiction (lines 23-24).
 - AGENTS.md:25: Prisma schema count mismatch.
+
+## T6 Close git-gate fail-open paths (second review)
+
+- [x] No jq: parse with node; unparseable git-write input is blocked (exit 2); other commands pass.
+- [x] Failing `git diff` (push/commit/merge) escalates to a full check instead of passing.
+- [x] Real toolchain test after `npm ci` + `DATABASE_PROVIDER=postgresql npm run db:generate`:
+  type error in staged src file → denied (TS2322); clean src file → allowed; `git status` without jq/node → allowed.
+
+Remaining non-blocking findings from review `review-af4cee1a866a800a` (follow-ups): deny message scope,
+FULL comment, full eslint on `src` dir, Husky pre-commit checks worktree not index, alternative bypasses.
+Note: `tsc` requires the Prisma client; run `npm run db:generate` after `npm ci` (add to `make install`).

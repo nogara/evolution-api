@@ -6,15 +6,29 @@
 #   - ESLint fails on the staged (commit), unpushed (push) or uncommitted (merge/rebase) .ts/.js
 #     files under src/; push with no upstream/origin/main base checks all of src/,
 #   - or the toolchain (node_modules/.bin/tsc, eslint) is missing: run `npm ci`.
+# Fails closed: unparseable input that looks like a git write, or a failing git diff, is
+# blocked or escalated to a full check instead of passing.
 # Emits a PreToolUse deny decision as JSON; otherwise exits 0 silently.
 
 set -o pipefail
 
 INPUT=$(cat)
+# Parse the tool input with jq, falling back to node (always present in this repo). If neither
+# can parse it, fail closed: an unparsed command must never be allowed through silently.
 if command -v jq >/dev/null 2>&1; then
-  CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null)
+  CMD=$(printf '%s' "$INPUT" | jq -r '.tool_input.command // empty' 2>/dev/null) || CMD_PARSE_FAILED=1
+elif command -v node >/dev/null 2>&1; then
+  CMD=$(printf '%s' "$INPUT" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{process.stdout.write(String((JSON.parse(s).tool_input||{}).command||""))})' 2>/dev/null) || CMD_PARSE_FAILED=1
 else
-  CMD=$INPUT
+  CMD_PARSE_FAILED=1
+fi
+if [ -n "$CMD_PARSE_FAILED" ]; then
+  # Only block unparsed input that looks like a git write; other commands are not gated.
+  if printf '%s' "$INPUT" | grep -qE 'git[^a-z].*(commit|push|merge|rebase)'; then
+    printf '%s\n' "Git gate: could not parse the tool input (install jq or node). Git write blocked." >&2
+    exit 2
+  fi
+  exit 0
 fi
 
 GIT_WRITE='(^|[[:space:]&|;(])git([[:space:]]+-[^[:space:]]+)*[[:space:]]+(commit|push|merge|rebase)([[:space:]]|$)'
@@ -61,17 +75,18 @@ if printf '%s' "$STRIPPED" | grep -qE 'git([[:space:]]+-[^[:space:]]+)*[[:space:
     BASE=origin/main
   fi
   if [ -n "$BASE" ]; then
-    FILES=$(git diff --name-only --diff-filter=d "$BASE"...HEAD 2>/dev/null)
+    # A failing diff (e.g. no merge base) falls back to a full check instead of passing.
+    FILES=$(git diff --name-only --diff-filter=d "$BASE"...HEAD 2>/dev/null) || FULL=1
   else
     # No base ref to diff against: fail closed with a full check instead of passing.
     FULL=1
   fi
 elif printf '%s' "$STRIPPED" | grep -qE "${GIT_COMMIT}([[:space:]]|\$)"; then
-  FILES=$(git diff --cached --name-only --diff-filter=d 2>/dev/null)
+  FILES=$(git diff --cached --name-only --diff-filter=d 2>/dev/null) || FULL=1
 else
   # merge/rebase: the incoming commits already passed their own gates; check that the local
   # working tree (staged + unstaged src/ changes vs HEAD) is not broken before rewriting history.
-  FILES=$(git diff HEAD --name-only --diff-filter=d 2>/dev/null)
+  FILES=$(git diff HEAD --name-only --diff-filter=d 2>/dev/null) || FULL=1
 fi
 
 if [ "$FULL" -eq 1 ]; then
