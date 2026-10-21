@@ -58,3 +58,13 @@ orbit, canal-whatsapp (alien) and stenfar.
 - Confirm whether `/instance/create` honors the `webhook` field (orbit relies on it; canal comment says it does not).
 - Locate where stenfar registers its webhook.
 - Decide whether to delete disabled upstream publish workflows and `check_code_quality.yml`; update `.husky/README.md`.
+
+## Review
+
+Native review `review-38e4968ca23c1f55` (4 lenses, high risk tier): approved and acknowledged.
+Non-blocking findings (follow-up work):
+
+- git-gate.sh: merge/rebase are no-ops; push scope fails open when no base ref; missing node_modules blocks every src commit; `-n`/`--no-verify` regex false positives.
+- purple-release: stale workflow and `latest` tag references; CHANGELOG layout drift.
+- purple-upstream-sync: upstream remote wording contradiction (lines 23-24).
+- AGENTS.md:25: Prisma schema count mismatch.
