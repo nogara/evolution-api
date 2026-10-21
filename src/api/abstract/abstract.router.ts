@@ -17,6 +17,14 @@ type DataValidate<T> = {
 
 const logger = new Logger('Validate');
 
+const isInstanceCreateRoute = (request: Request) =>
+  request.baseUrl.endsWith('/instance') && request.route?.path === '/create';
+
+const restoreAuthorizedInstance = (instance: InstanceDto, authorizedInstanceName: string) => {
+  instance.instanceName = authorizedInstanceName;
+  delete instance.instanceId;
+};
+
 export abstract class RouterBroker {
   constructor() {}
   public routerPath(path: string, param = true) {
@@ -32,13 +40,18 @@ export abstract class RouterBroker {
     const ref = new ClassRef();
     const body = request.body;
     const instance = request.params as unknown as InstanceDto;
+    const authorizedInstanceName = request.params?.instanceName;
 
     if (request?.query && Object.keys(request.query).length > 0) {
       Object.assign(instance, request.query);
     }
 
-    if (request.originalUrl.includes('/instance/create')) {
+    if (isInstanceCreateRoute(request)) {
       Object.assign(instance, body);
+    }
+
+    if (authorizedInstanceName) {
+      restoreAuthorizedInstance(instance, authorizedInstanceName);
     }
 
     Object.assign(ref, body);
