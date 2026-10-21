@@ -20,14 +20,13 @@ git remote -v   # upstream must exist
 git fetch upstream --tags
 ```
 
-`upstream` currently points to `https://github.com/EvolutionAPI/evolution-api.git` ; the task
-spec names `evolution-foundation/evolution-api` as canonical — confirm which URL is current
-with the user before changing the remote. Never push to upstream.
+`upstream` must point to `https://github.com/evolution-foundation/evolution-api.git`
+(`evolution-foundation/evolution-api` is the old org name and only redirects). Never push to upstream.
 
 ## Procedure (one backport = one branch = one PR)
 
 1. Identify the source: upstream PR number and commit sha(s). `git log upstream/main --oneline`
-   or `gh pr view <n> --repo EvolutionAPI/evolution-api`.
+   or `gh pr view <n> --repo evolution-foundation/evolution-api`.
 2. Check the denylist below. If the commit touches any denylisted area, stop and ask.
 3. Branch from `main`: `git switch -c backport/<short-slug>`.
 4. Cherry-pick with provenance:
@@ -37,7 +36,7 @@ with the user before changing the remote. Never push to upstream.
    hunk; drop unrelated upstream refactors.
 6. Amend the message body (keep the `(cherry picked from commit ...)` trailer) with:
    ```
-   Upstream: EvolutionAPI/evolution-api#<PR> (<sha>)
+   Upstream: evolution-foundation/evolution-api#<PR> (<sha>)
    Conflicts: <files and how resolved | none>
    ```
 7. Verify: `npx tsc --noEmit`, `npm run build`, `npm run lint:check`; manual run if it touches

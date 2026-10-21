@@ -41,7 +41,7 @@ After `1.0.0`, standard SemVer (breaking ⇒ MAJOR).
 - <change> — consumers affected: orbit | canal-whatsapp | stenfar; migration: <note>
 
 ### Features / Fixes / Backports
-- <change> (upstream EvolutionAPI/evolution-api#<PR>, <sha>) when backported
+- <change> (upstream evolution-foundation/evolution-api#<PR>, <sha>) when backported
 
 ---
 
