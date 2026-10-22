@@ -2,7 +2,7 @@ import { AuthStateProvider } from '@utils/use-multi-file-auth-state-provider-fil
 import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { loggers, loggersNamed } from '../helpers/logger';
+import { loggers, loggersNamed, onlyLoggerNamed } from '../helpers/logger';
 
 vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
 
@@ -147,7 +147,7 @@ describe('AuthStateProvider', () => {
 
     expect(providerFiles.removeSession).toHaveBeenCalledWith('instance');
     expect(providerFiles.files.size).toBe(0);
-    expect(loggersNamed('useMultiFileAuthStatePrisma')[0].info).toHaveBeenCalledWith({
+    expect(onlyLoggerNamed('useMultiFileAuthStatePrisma').info).toHaveBeenCalledWith({
       action: 'remove.session',
       instance: 'instance',
       response: { status: 200, data: 'removed' },

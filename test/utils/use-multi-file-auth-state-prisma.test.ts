@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCacheService, InMemoryRedisCache } from '../helpers/cache';
 import { files } from '../helpers/fs-promises';
-import { loggersNamed } from '../helpers/logger';
+import { loggersNamed, onlyLoggerNamed } from '../helpers/logger';
 
 const mocks = vi.hoisted(() => ({
   cacheConf: { REDIS: { ENABLED: false } },
@@ -45,7 +45,7 @@ describe('useMultiFileAuthStatePrisma', () => {
   });
 
   const open = () => useMultiFileAuthStatePrisma('session', cache);
-  const authLogger = () => loggersNamed('useMultiFileAuthStatePrisma')[0];
+  const authLogger = () => onlyLoggerNamed('useMultiFileAuthStatePrisma');
 
   it('creates and persists fresh creds when nothing is stored', async () => {
     const { state } = await open();
