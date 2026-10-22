@@ -48,6 +48,32 @@ describe('createJid', () => {
     expect(createJid('+54 9 261 610-7398')).toBe('5492616107398@s.whatsapp.net');
   });
 
+  it.each([
+    ['Buenos Aires', '5491123456789'],
+    ['Cordoba', '5493511234567'],
+    ['Rosario', '5493411234567'],
+    ['four digit area code', '5492966123456'],
+  ])('keeps the mobile 9 for %s mobiles', (_area, number) => {
+    expect(createJid(number)).toBe(`${number}@s.whatsapp.net`);
+  });
+
+  it.each(['+54 9 11 2345-6789', '+54 (9) 11 2345 6789', '549-11-2345-6789', '+549 11 23456789'])(
+    'normalizes the formatted Argentine mobile %s keeping the 9',
+    (formatted) => {
+      expect(createJid(formatted)).toBe('5491123456789@s.whatsapp.net');
+    },
+  );
+
+  it('passes Argentine jids through unchanged with or without the 9', () => {
+    expect(createJid('5491123456789@s.whatsapp.net')).toBe('5491123456789@s.whatsapp.net');
+    expect(createJid('541123456789@s.whatsapp.net')).toBe('541123456789@s.whatsapp.net');
+    expect(createJid('5491123456789:7@s.whatsapp.net')).toBe('5491123456789@s.whatsapp.net');
+  });
+
+  it('keeps Argentine numbers with fewer than 12 digits unchanged', () => {
+    expect(createJid('54112345678')).toBe('54112345678@s.whatsapp.net');
+  });
+
   it('KNOWN BUG: removes the third digit from 13 digit Mexican numbers (current behavior)', () => {
     expect(createJid('5215512345678')).toBe('525512345678@s.whatsapp.net');
   });
