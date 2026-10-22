@@ -1,18 +1,9 @@
 import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ loggers: [] as any[] }));
+import { loggers } from '../helpers/logger';
 
-vi.mock('@config/logger.config', () => ({
-  Logger: class {
-    info = vi.fn();
-    warn = vi.fn();
-    error = vi.fn();
-    constructor() {
-      mocks.loggers.push(this);
-    }
-  },
-}));
+vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
 
 import { AuthStateProvider } from '@utils/use-multi-file-auth-state-provider-files';
 
@@ -157,7 +148,7 @@ describe('AuthStateProvider', () => {
 
     expect(providerFiles.removeSession).toHaveBeenCalledWith('instance');
     expect(providerFiles.files.size).toBe(0);
-    expect(mocks.loggers.some((logger) => logger.info.mock.calls.length > 0)).toBe(true);
+    expect(loggers.some((logger) => logger.info.mock.calls.length > 0)).toBe(true);
   });
 
   it('returns undefined and logs when the session folder cannot be created', async () => {
@@ -167,7 +158,7 @@ describe('AuthStateProvider', () => {
     const result = await open();
 
     expect(result).toBeUndefined();
-    expect(mocks.loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
+    expect(loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
   });
 
   it('KNOWN BUG: swallows read, write and delete errors without logging them (current behavior)', async () => {
@@ -185,7 +176,7 @@ describe('AuthStateProvider', () => {
     await expect(state.keys.get('session', ['a'])).resolves.toEqual({ a: undefined });
     await expect(removeCreds()).resolves.toBeUndefined();
 
-    for (const logger of mocks.loggers) {
+    for (const logger of loggers) {
       expect(logger.error).not.toHaveBeenCalled();
       expect(logger.info).not.toHaveBeenCalled();
     }
@@ -204,6 +195,6 @@ describe('AuthStateProvider', () => {
     await state.keys.get('session', ['a']);
     await removeCreds();
 
-    expect(mocks.loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
+    expect(loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
   });
 });

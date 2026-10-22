@@ -1,26 +1,18 @@
-import { BufferJSON, proto } from 'baileys';
+import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { createCacheService, InMemoryRedisCache } from '../helpers/cache';
+import { files } from '../helpers/fs-promises';
+import { loggersNamed } from '../helpers/logger';
+
 const mocks = vi.hoisted(() => ({
-  loggers: [] as any[],
   cacheConf: { REDIS: { ENABLED: false } },
   sessions: new Map<string, string>(),
-  files: new Map<string, string>(),
 }));
 
-vi.mock('@config/logger.config', () => ({
-  Logger: class {
-    info = vi.fn();
-    warn = vi.fn();
-    error = vi.fn();
-    constructor() {
-      mocks.loggers.push(this);
-    }
-  },
-}));
+vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
 vi.mock('@config/env.config', () => ({ configService: { get: vi.fn(() => mocks.cacheConf) } }));
 vi.mock('@config/path.config', () => ({ INSTANCE_DIR: '/instances' }));
-vi.mock('@api/services/cache.service', () => ({ CacheService: class {} }));
 vi.mock('@api/server.module', () => ({
   prismaRepository: {
     session: {
@@ -35,70 +27,26 @@ vi.mock('@api/server.module', () => ({
     },
   },
 }));
-vi.mock('fs/promises', () => {
-  const enoent = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
-  const fs = {
-    mkdir: vi.fn(async () => undefined),
-    stat: vi.fn(async (file: string) => {
-      if (!mocks.files.has(file)) throw enoent();
-      return { isFile: () => true };
-    }),
-    readFile: vi.fn(async (file: string) => {
-      if (!mocks.files.has(file)) throw enoent();
-      return mocks.files.get(file);
-    }),
-    writeFile: vi.fn(async (file: string, data: string) => {
-      mocks.files.set(file, data);
-    }),
-    unlink: vi.fn(async (file: string) => {
-      if (!mocks.files.delete(file)) throw enoent();
-    }),
-  };
-  return { default: fs, ...fs };
-});
+vi.mock('fs/promises', async () => (await import('../helpers/fs-promises')).fsPromisesModule);
 
 import { prismaRepository } from '@api/server.module';
+import { CacheService } from '@api/services/cache.service';
 import useMultiFileAuthStatePrisma from '@utils/use-multi-file-auth-state-prisma';
 import fs from 'fs/promises';
 
-const createCache = () => {
-  const hashes = new Map<string, Map<string, string>>();
-  const hash = (key: string) => {
-    if (!hashes.has(key)) hashes.set(key, new Map());
-    return hashes.get(key);
-  };
-  return {
-    hashes,
-    hSet: vi.fn(async (key: string, field: string, value: any) => {
-      hash(key).set(field, JSON.stringify(value, BufferJSON.replacer));
-    }),
-    hGet: vi.fn(async (key: string, field: string) => {
-      const data = hash(key).get(field);
-      return data ? JSON.parse(data, BufferJSON.reviver) : null;
-    }),
-    hDelete: vi.fn(async (key: string, field: string) => {
-      hash(key).delete(field);
-      return true;
-    }),
-    delete: vi.fn(async (key: string) => {
-      hashes.delete(key);
-    }),
-  };
-};
-
-const lastLogger = () => mocks.loggers[mocks.loggers.length - 1];
-
 describe('useMultiFileAuthStatePrisma', () => {
-  let cache: ReturnType<typeof createCache>;
+  let inner: InMemoryRedisCache;
+  let cache: CacheService;
 
   beforeEach(() => {
     mocks.sessions.clear();
-    mocks.files.clear();
+    files.clear();
     mocks.cacheConf.REDIS.ENABLED = false;
-    cache = createCache();
+    ({ inner, service: cache } = createCacheService());
   });
 
-  const open = () => useMultiFileAuthStatePrisma('session', cache as any);
+  const open = () => useMultiFileAuthStatePrisma('session', cache);
+  const authLogger = () => loggersNamed('useMultiFileAuthStatePrisma')[0];
 
   it('creates and persists fresh creds when nothing is stored', async () => {
     const { state } = await open();
@@ -134,8 +82,7 @@ describe('useMultiFileAuthStatePrisma', () => {
       mocks.cacheConf.REDIS.ENABLED = redisEnabled;
     });
 
-    const storedKeys = () =>
-      redisEnabled ? [...(cache.hashes.get('session')?.keys() ?? [])] : [...mocks.files.keys()];
+    const storedKeys = () => (redisEnabled ? [...(inner.hashes.get('session')?.keys() ?? [])] : [...files.keys()]);
 
     it('round trips pre-keys and sessions through serialized storage', async () => {
       const { state } = await open();
@@ -170,8 +117,8 @@ describe('useMultiFileAuthStatePrisma', () => {
 
     it('decodes app state sync key data persisted as a base64 string', async () => {
       const raw = JSON.stringify({ keyData: 'AQID' });
-      if (redisEnabled) cache.hashes.set('session', new Map([['app-state-sync-key-BBB', raw]]));
-      else mocks.files.set('/instances/session/app-state-sync-key-BBB.json', raw);
+      if (redisEnabled) inner.writeRaw('session', 'app-state-sync-key-BBB', raw);
+      else files.set('/instances/session/app-state-sync-key-BBB.json', raw);
       const { state } = await open();
 
       const result = await state.keys.get('app-state-sync-key', ['BBB']);
@@ -199,8 +146,8 @@ describe('useMultiFileAuthStatePrisma', () => {
     await removeCreds();
 
     expect(mocks.sessions.has('session')).toBe(false);
-    expect(mocks.files.size).toBe(1);
-    expect(lastLogger().info).toHaveBeenCalledWith({ action: 'auth.key.delete', sessionId: 'session' });
+    expect(files.size).toBe(1);
+    expect(authLogger().info).toHaveBeenCalledWith({ action: 'auth.key.delete', sessionId: 'session' });
   });
 
   it.fails('removes the database creds and local key files on removeCreds without redis', async () => {
@@ -210,7 +157,7 @@ describe('useMultiFileAuthStatePrisma', () => {
     await removeCreds();
 
     expect(mocks.sessions.has('session')).toBe(false);
-    expect(mocks.files.size).toBe(0);
+    expect(files.size).toBe(0);
   });
 
   it('KNOWN BUG: keeps the database creds on removeCreds with redis (current behavior)', async () => {
@@ -220,9 +167,9 @@ describe('useMultiFileAuthStatePrisma', () => {
 
     await removeCreds();
 
-    expect(cache.hashes.has('session')).toBe(false);
+    expect(inner.hashes.has('session')).toBe(false);
     expect(mocks.sessions.has('session')).toBe(true);
-    expect(lastLogger().info).toHaveBeenCalledWith({ action: 'redis.delete', sessionId: 'session' });
+    expect(authLogger().info).toHaveBeenCalledWith({ action: 'redis.delete', sessionId: 'session' });
   });
 
   it.fails('clears the redis hash and the database creds on removeCreds with redis', async () => {
@@ -232,33 +179,46 @@ describe('useMultiFileAuthStatePrisma', () => {
 
     await removeCreds();
 
-    expect(cache.hashes.has('session')).toBe(false);
+    expect(inner.hashes.has('session')).toBe(false);
     expect(mocks.sessions.has('session')).toBe(false);
   });
 
   it('logs the redis failure and falls back to deleting database creds', async () => {
     mocks.cacheConf.REDIS.ENABLED = true;
-    const error = new Error('redis down');
-    cache.delete.mockRejectedValue(error);
     const { removeCreds } = await open();
+    inner.down = true;
 
     await removeCreds();
 
-    expect(lastLogger().warn).toHaveBeenCalledWith({ action: 'redis.delete', sessionId: 'session', err: error });
+    expect(authLogger().warn).toHaveBeenCalledWith({ action: 'redis.delete', sessionId: 'session', err: inner.error });
     expect(mocks.sessions.has('session')).toBe(false);
+  });
+
+  it('drops redis key writes and reads without throwing when redis is down', async () => {
+    mocks.cacheConf.REDIS.ENABLED = true;
+    const { state } = await open();
+    inner.down = true;
+
+    await expect(state.keys.set({ session: { a: Buffer.from([1]), b: null } })).resolves.toBeUndefined();
+    await expect(state.keys.get('session', ['a'])).resolves.toEqual({ a: null });
+    inner.down = false;
+
+    expect(inner.hashes.get('session')?.has('session-a')).toBeFalsy();
+    expect(await state.keys.get('session', ['a'])).toEqual({ a: null });
+    expect(loggersNamed('CacheService').at(-1).error).toHaveBeenCalledWith(inner.error);
   });
 
   it('swallows database and file read errors without logging them', async () => {
     vi.mocked(prismaRepository.session.findUnique).mockRejectedValueOnce(new Error('db down'));
     vi.mocked(fs.readFile).mockRejectedValueOnce(new Error('disk error'));
-    mocks.files.set('/instances/session/session-a.json', '{}');
+    files.set('/instances/session/session-a.json', '{}');
 
     const { state } = await open();
     const result = await state.keys.get('session', ['a']);
 
     expect(state.creds.registered).toBe(false);
     expect(result).toEqual({ a: null });
-    expect(lastLogger().error).not.toHaveBeenCalled();
+    expect(authLogger().error).not.toHaveBeenCalled();
   });
 
   it('swallows database write errors and leaves creds unsaved', async () => {
@@ -268,7 +228,7 @@ describe('useMultiFileAuthStatePrisma', () => {
 
     await expect(saveCreds()).resolves.toBeUndefined();
     expect(mocks.sessions.has('session')).toBe(false);
-    expect(lastLogger().error).not.toHaveBeenCalled();
+    expect(authLogger().error).not.toHaveBeenCalled();
   });
 
   it('KNOWN BUG: rejects keys.set when a local file write fails (current behavior)', async () => {

@@ -1,72 +1,38 @@
-import { BufferJSON, initAuthCreds, proto } from 'baileys';
+import { initAuthCreds, proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ loggers: [] as any[] }));
+import { createCacheService, InMemoryRedisCache } from '../helpers/cache';
+import { lastLogger, loggers, loggersNamed } from '../helpers/logger';
 
-vi.mock('@config/logger.config', () => ({
-  Logger: class {
-    info = vi.fn();
-    warn = vi.fn();
-    error = vi.fn();
-    constructor() {
-      mocks.loggers.push(this);
-    }
-  },
-}));
+vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
 
+import { CacheService } from '@api/services/cache.service';
 import { useMultiFileAuthStateRedisDb } from '@utils/use-multi-file-auth-state-redis-db';
 
-const createCache = () => {
-  const hashes = new Map<string, Map<string, string>>();
-  const hash = (key: string) => {
-    if (!hashes.has(key)) hashes.set(key, new Map());
-    return hashes.get(key);
-  };
-  return {
-    hashes,
-    hSet: vi.fn(async (key: string, field: string, value: any) => {
-      hash(key).set(field, JSON.stringify(value, BufferJSON.replacer));
-    }),
-    hGet: vi.fn(async (key: string, field: string) => {
-      const data = hash(key).get(field);
-      return data ? JSON.parse(data, BufferJSON.reviver) : null;
-    }),
-    hDelete: vi.fn(async (key: string, field: string) => {
-      hash(key).delete(field);
-      return true;
-    }),
-    delete: vi.fn(async (key: string) => {
-      hashes.delete(key);
-    }),
-  };
-};
-
-const lastLogger = () => mocks.loggers[mocks.loggers.length - 1];
-
 describe('useMultiFileAuthStateRedisDb', () => {
-  let cache: ReturnType<typeof createCache>;
+  let inner: InMemoryRedisCache;
+  let cache: CacheService;
 
   beforeEach(() => {
-    mocks.loggers.length = 0;
-    cache = createCache();
+    loggers.length = 0;
+    ({ inner, service: cache } = createCacheService());
   });
 
-  const open = () => useMultiFileAuthStateRedisDb('instance', cache as any);
+  const open = () => useMultiFileAuthStateRedisDb('instance', cache);
 
   it('starts with fresh creds when nothing is stored', async () => {
     const { state } = await open();
 
     expect(state.creds.registered).toBe(false);
     expect(state.creds.noiseKey.private).toHaveLength(32);
-    expect(cache.hashes.get('instance')?.has('creds')).toBe(false);
+    expect(inner.hashes.get('instance')?.has('creds')).toBeFalsy();
   });
 
   it('restores saved creds with binary fields intact after reopening', async () => {
     const first = await open();
     await first.saveCreds();
 
-    const stored = cache.hashes.get('instance').get('creds');
-    expect(typeof stored).toBe('string');
+    expect(typeof inner.readRaw('instance', 'creds')).toBe('string');
 
     const second = await open();
 
@@ -100,7 +66,7 @@ describe('useMultiFileAuthStateRedisDb', () => {
 
     await state.keys.set({ 'app-state-sync-key': { AAA: value } });
 
-    expect(JSON.parse(cache.hashes.get('instance').get('app-state-sync-key-AAA')).keyData).toBe('CQgHBg==');
+    expect(JSON.parse(inner.readRaw('instance', 'app-state-sync-key-AAA')).keyData).toBe('CQgHBg==');
 
     const result = await state.keys.get('app-state-sync-key', ['AAA']);
 
@@ -110,7 +76,7 @@ describe('useMultiFileAuthStateRedisDb', () => {
   });
 
   it('decodes app state sync key data persisted as a base64 string', async () => {
-    cache.hashes.set('instance', new Map([['app-state-sync-key-BBB', JSON.stringify({ keyData: 'AQID' })]]));
+    inner.writeRaw('instance', 'app-state-sync-key-BBB', JSON.stringify({ keyData: 'AQID' }));
     const { state } = await open();
 
     const result = await state.keys.get('app-state-sync-key', ['BBB']);
@@ -139,48 +105,35 @@ describe('useMultiFileAuthStateRedisDb', () => {
     await removeCreds();
 
     expect(cache.delete).toHaveBeenCalledWith('instance');
-    expect(cache.hashes.has('instance')).toBe(false);
+    expect(inner.hashes.has('instance')).toBe(false);
     expect(lastLogger().warn).toHaveBeenCalledWith({ action: 'redis.delete', instanceName: 'instance' });
   });
 
-  it('logs and swallows read, write and delete errors', async () => {
-    const error = new Error('redis down');
-    cache.hGet.mockRejectedValue(error);
-    cache.hSet.mockRejectedValue(error);
-    cache.hDelete.mockRejectedValue(error);
-    cache.delete.mockRejectedValue(error);
+  it('silently drops saved creds when redis is down so reopening yields fresh creds', async () => {
+    inner.down = true;
+    const first = await open();
+    first.state.creds.registered = true;
 
-    const { state, saveCreds, removeCreds } = await open();
-    const logger = lastLogger();
+    await expect(first.saveCreds()).resolves.toBeUndefined();
+    inner.down = false;
+    const second = await open();
+
+    expect(inner.hashes.get('instance')?.has('creds')).toBeFalsy();
+    expect(second.state.creds.registered).toBe(false);
+    expect(second.state.creds.noiseKey.private).not.toEqual(first.state.creds.noiseKey.private);
+  });
+
+  it('swallows read, write and delete errors inside CacheService when redis is down', async () => {
+    inner.down = true;
+    const { state, removeCreds } = await open();
 
     expect(state.creds.registered).toBe(false);
-    await expect(saveCreds()).resolves.toBeUndefined();
     await expect(state.keys.set({ session: { a: Buffer.from([1]), b: null } })).resolves.toBeUndefined();
-    await expect(state.keys.get('session', ['a'])).resolves.toEqual({ a: undefined });
+    await expect(state.keys.get('session', ['a'])).resolves.toEqual({ a: null });
     await expect(removeCreds()).resolves.toBeUndefined();
 
-    expect(logger.error).toHaveBeenCalledWith({ localError: 'readData', error });
-    expect(logger.error).toHaveBeenCalledWith({ localError: 'writeData', error });
-  });
-
-  it('KNOWN BUG: logs removeData errors under a readData key (current behavior)', async () => {
-    const error = new Error('redis down');
-    cache.hDelete.mockRejectedValue(error);
-    const { state } = await open();
-
-    await state.keys.set({ session: { b: null } });
-
-    expect(lastLogger().error).toHaveBeenCalledWith({ readData: 'removeData', error });
-  });
-
-  it.fails('logs removeData errors under the localError key', async () => {
-    const error = new Error('redis down');
-    cache.hDelete.mockRejectedValue(error);
-    const { state } = await open();
-
-    await state.keys.set({ session: { b: null } });
-
-    expect(lastLogger().error).toHaveBeenCalledWith({ localError: 'removeData', error });
+    expect(loggersNamed('CacheService')[0].error).toHaveBeenCalledWith(inner.error);
+    expect(loggersNamed('useMultiFileAuthStateRedisDb')[0].error).not.toHaveBeenCalled();
   });
 
   it('keeps the initial creds object when a fresh instance has nothing stored', async () => {
