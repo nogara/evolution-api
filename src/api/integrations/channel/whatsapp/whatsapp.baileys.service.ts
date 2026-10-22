@@ -269,6 +269,28 @@ export class BaileysStartupService extends ChannelStartupService {
     this.messageProcessor.onDestroy();
     await this.client?.logout('Log out instance: ' + this.instanceName);
 
+    this.endSession = true;
+    this.stateConnection = { state: 'close', statusReason: DisconnectReason.loggedOut };
+    const disconnectionAt = new Date();
+
+    this.sendDataWebhook(Events.STATUS_INSTANCE, {
+      instance: this.instance.name,
+      status: 'closed',
+      disconnectionAt,
+      disconnectionReasonCode: DisconnectReason.loggedOut,
+    });
+
+    try {
+      await this.prismaRepository.instance.update({
+        where: { id: this.instanceId },
+        data: { connectionStatus: 'close', disconnectionAt, disconnectionReasonCode: DisconnectReason.loggedOut },
+      });
+    } catch (error) {
+      this.logger.error(['Error persisting the closed connection state on logout', error?.message]);
+    }
+
+    this.sendDataWebhook(Events.CONNECTION_UPDATE, { instance: this.instance.name, ...this.stateConnection });
+
     this.client?.ws?.close();
 
     const db = this.configService.get<Database>('DATABASE');
@@ -297,6 +319,8 @@ export class BaileysStartupService extends ChannelStartupService {
     if (sessionExists) {
       await this.prismaRepository.session.delete({ where: { sessionId: this.instanceId } });
     }
+
+    this.eventEmitter.emit('logout.instance', this.instance.name, 'inner');
   }
 
   public async getProfileName() {
@@ -415,6 +439,10 @@ export class BaileysStartupService extends ChannelStartupService {
         where: { id: this.instanceId },
         data: { connectionStatus: 'connecting' },
       });
+    }
+
+    if (connection === 'close' && this.endSession && this.stateConnection.state === 'close') {
+      return;
     }
 
     if (connection) {
