@@ -1,4 +1,8 @@
+import { prismaRepository } from '@api/server.module';
+import { CacheService } from '@api/services/cache.service';
+import useMultiFileAuthStatePrisma from '@utils/use-multi-file-auth-state-prisma';
 import { proto } from 'baileys';
+import fs from 'fs/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCacheService, InMemoryRedisCache } from '../helpers/cache';
@@ -28,11 +32,6 @@ vi.mock('@api/server.module', () => ({
   },
 }));
 vi.mock('fs/promises', async () => (await import('../helpers/fs-promises')).fsPromisesModule);
-
-import { prismaRepository } from '@api/server.module';
-import { CacheService } from '@api/services/cache.service';
-import useMultiFileAuthStatePrisma from '@utils/use-multi-file-auth-state-prisma';
-import fs from 'fs/promises';
 
 describe('useMultiFileAuthStatePrisma', () => {
   let inner: InMemoryRedisCache;
@@ -213,7 +212,7 @@ describe('useMultiFileAuthStatePrisma', () => {
 
     expect(inner.hashes.get('session')?.has('session-a')).toBeFalsy();
     expect(await state.keys.get('session', ['a'])).toEqual({ a: null });
-    expect(loggersNamed('CacheService').at(-1).error).toHaveBeenCalledWith(inner.error);
+    expect(loggersNamed('CacheService').slice(-1)[0].error).toHaveBeenCalledWith(inner.error);
   });
 
   it('swallows database and file read errors without logging them', async () => {

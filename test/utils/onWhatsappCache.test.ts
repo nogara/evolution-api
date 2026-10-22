@@ -1,3 +1,4 @@
+import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
@@ -14,8 +15,6 @@ vi.mock('@config/logger.config', () => ({
     error = vi.fn();
   },
 }));
-
-import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
 
 const { isOnWhatsapp } = mocks;
 

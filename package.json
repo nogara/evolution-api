@@ -10,8 +10,9 @@
     "start:prod": "node dist/main",
     "dev:server": "tsx watch ./src/main.ts",
     "test": "vitest run",
-    "lint": "eslint --fix --ext .ts src",
-    "lint:check": "eslint --ext .ts src",
+    "lint": "eslint --fix --ext .ts src test",
+    "lint:check": "eslint --ext .ts src test",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
     "commit": "cz",
     "commitlint": "commitlint --edit",
     "db:generate": "node runWithProvider.js \"npx prisma generate --schema ./prisma/DATABASE_PROVIDER-schema.prisma\"",
@@ -59,6 +60,9 @@
     ],
     "src/**/*.ts": [
       "sh -c 'tsc --noEmit'"
+    ],
+    "test/**/*.ts": [
+      "eslint --fix"
     ]
   },
   "config": {

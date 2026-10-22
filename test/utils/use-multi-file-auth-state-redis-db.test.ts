@@ -1,3 +1,5 @@
+import { CacheService } from '@api/services/cache.service';
+import { useMultiFileAuthStateRedisDb } from '@utils/use-multi-file-auth-state-redis-db';
 import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,9 +7,6 @@ import { createCacheService, InMemoryRedisCache } from '../helpers/cache';
 import { lastLogger, loggers, loggersNamed } from '../helpers/logger';
 
 vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
-
-import { CacheService } from '@api/services/cache.service';
-import { useMultiFileAuthStateRedisDb } from '@utils/use-multi-file-auth-state-redis-db';
 
 describe('useMultiFileAuthStateRedisDb', () => {
   let inner: InMemoryRedisCache;

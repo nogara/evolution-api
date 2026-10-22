@@ -1,3 +1,4 @@
+import { getConversationMessage } from '@utils/getConversationMessage';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const s3 = vi.hoisted(() => ({ ENABLE: false, SAVE_VIDEO: false }));
@@ -5,8 +6,6 @@ const s3 = vi.hoisted(() => ({ ENABLE: false, SAVE_VIDEO: false }));
 vi.mock('@config/env.config', () => ({
   configService: { get: vi.fn(() => s3) },
 }));
-
-import { getConversationMessage } from '@utils/getConversationMessage';
 
 const key = { id: 'MSG1' };
 

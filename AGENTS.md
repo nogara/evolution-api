@@ -31,7 +31,8 @@ and **stenfar**. Anything they consume is a public contract.
 ## Commands & danger zones
 
 - **Local / safe:** `npm run dev:server` (tsx watch), `npm start`, `npm run build` (`tsc --noEmit && tsup`),
-  `npm test` (Vitest, `test/**/*.test.ts`), `npm run lint:check`, `npx tsc --noEmit`, `make check-docs`,
+  `npm test` (Vitest, `test/**/*.test.ts`), `npm run lint:check` (src + test), `npx tsc --noEmit`,
+  `npm run typecheck:test` (src + test + `vitest.config.ts`), `make check-docs`,
   `npm run db:generate`, `docker-compose -f docker-compose.dev.yaml up -d`.
 - **Database:** always `export DATABASE_PROVIDER=postgresql` (or `mysql`) first. `npm run db:migrate:dev`
   only against a local database. Every schema change ships migrations for BOTH providers.
@@ -123,6 +124,7 @@ how our code processes data; Baileys is mocked where it touches the socket. Befo
 ```bash
 npm test
 npx tsc --noEmit
+npm run typecheck:test
 npm run build
 npm run lint:check
 make check-docs      # docs drift guard (pointers, skill frontmatter)

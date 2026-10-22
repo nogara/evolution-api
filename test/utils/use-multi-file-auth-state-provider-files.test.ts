@@ -1,11 +1,10 @@
+import { AuthStateProvider } from '@utils/use-multi-file-auth-state-provider-files';
 import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { loggers, loggersNamed } from '../helpers/logger';
 
 vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
-
-import { AuthStateProvider } from '@utils/use-multi-file-auth-state-provider-files';
 
 const createProviderFiles = () => {
   const files = new Map<string, string>();
@@ -162,7 +161,7 @@ describe('AuthStateProvider', () => {
     const result = await open();
 
     expect(result).toBeUndefined();
-    expect(loggersNamed('AuthStateProvider').at(-1).error).toHaveBeenCalledWith([
+    expect(loggersNamed('AuthStateProvider').slice(-1)[0].error).toHaveBeenCalledWith([
       'Failed to create folder on file server',
       'provider offline',
       error.stack,

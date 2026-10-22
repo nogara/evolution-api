@@ -24,8 +24,9 @@ lint: ## ESLint with auto-fix (npm run lint)
 test: ## Run the unit tests once (npm test)
 	npm test
 
-typecheck: ## TypeScript check without emit
+typecheck: ## TypeScript check without emit (src, then src + test)
 	npx --no tsc --noEmit
+	npm run typecheck:test
 
 check-docs: ## Validate agent docs (AGENTS.md, CLAUDE.md, skills, links)
 	bash scripts/check-docs.sh
