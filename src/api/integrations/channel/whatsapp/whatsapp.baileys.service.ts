@@ -83,6 +83,13 @@ import { Instance, Message } from '@prisma/client';
 import { createJid } from '@utils/createJid';
 import { fetchLatestWaWebVersion } from '@utils/fetchLatestWaWebVersion';
 import { makeProxyAgent, makeProxyAgentUndici } from '@utils/makeProxyAgent';
+import {
+  MESSAGE_DEDUPE_TTL_SECONDS,
+  messageDedupeKey,
+  MessageDedupeKeyInput,
+  messageDedupeMark,
+  shouldProcessMessage,
+} from '@utils/messageDedupe';
 import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
 import { status } from '@utils/renderStatus';
 import { resolvePhoneRemoteJid } from '@utils/resolvePhoneRemoteJid';
@@ -955,6 +962,28 @@ export class BaileysStartupService extends ChannelStartupService {
     },
   };
 
+  private async isDuplicateMessage(key: MessageDedupeKeyInput): Promise<boolean> {
+    try {
+      const seen = await this.baileysCache.get(messageDedupeKey(this.instanceId, key));
+      return !shouldProcessMessage(seen, key);
+    } catch (error) {
+      this.logger.warn(`Message dedupe lookup failed, processing message: ${error?.message}`);
+      return false;
+    }
+  }
+
+  private async markMessageSeen(key: MessageDedupeKeyInput): Promise<void> {
+    try {
+      await this.baileysCache.set(
+        messageDedupeKey(this.instanceId, key),
+        messageDedupeMark(key),
+        MESSAGE_DEDUPE_TTL_SECONDS,
+      );
+    } catch (error) {
+      this.logger.warn(`Message dedupe mark failed: ${error?.message}`);
+    }
+  }
+
   private readonly messageHandle = {
     'messaging-history.set': async ({
       messages,
@@ -1062,7 +1091,7 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
-          if (messagesRepository?.has(m.key.id)) {
+          if (messagesRepository?.has(m.key.id) || (await this.isDuplicateMessage(m.key))) {
             continue;
           }
 
@@ -1075,6 +1104,7 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
+          await this.markMessageSeen(m.key);
           messagesRaw.push(this.prepareMessage(m));
         }
 
@@ -1196,6 +1226,11 @@ export class BaileysStartupService extends ChannelStartupService {
           }
 
           if ((type !== 'notify' && type !== 'append') || editedMessage || !received?.message) {
+            continue;
+          }
+
+          if (await this.isDuplicateMessage(received.key)) {
+            this.logger.verbose(`Duplicate message ignored: ${received.key.id}`);
             continue;
           }
 
@@ -1514,6 +1549,8 @@ export class BaileysStartupService extends ChannelStartupService {
           console.log(messageRaw);
 
           this.sendDataWebhook(Events.MESSAGES_UPSERT, messageRaw);
+
+          await this.markMessageSeen(received.key);
 
           await chatbotController.emit({
             instance: { instanceName: this.instance.name, instanceId: this.instanceId },
@@ -2456,6 +2493,10 @@ export class BaileysStartupService extends ChannelStartupService {
       }
 
       const messageRaw = this.prepareMessage(messageSent);
+
+      if (messageSent?.key) {
+        await this.markMessageSeen(messageSent.key);
+      }
 
       const isMedia =
         messageSent?.message?.imageMessage ||
