@@ -1,0 +1,49 @@
+import { BaileysStartupService } from '@api/integrations/channel/whatsapp/whatsapp.baileys.service';
+import { describe, expect, it, vi } from 'vitest';
+
+const buildService = (queryRaw: () => Promise<unknown>) => {
+  const service = Object.create(BaileysStartupService.prototype) as any;
+  service.instance = { id: 'instance-id', name: 'instance-name' };
+  service.prismaRepository = { $queryRaw: vi.fn(queryRaw) };
+  return service;
+};
+
+const key = { id: 'MESSAGE-ID', remoteJid: '5491123456789@s.whatsapp.net', fromMe: true };
+
+describe('BaileysStartupService.getMessage', () => {
+  it('returns undefined for an unknown key so Baileys skips the retry resend', async () => {
+    const service = buildService(async () => []);
+
+    await expect(service.getMessage(key)).resolves.toBeUndefined();
+    await expect(service.getMessage(key, true)).resolves.toBeUndefined();
+  });
+
+  it('returns undefined when the lookup fails', async () => {
+    const service = buildService(async () => {
+      throw new Error('database unavailable');
+    });
+
+    await expect(service.getMessage(key)).resolves.toBeUndefined();
+    await expect(service.getMessage(key, true)).resolves.toBeUndefined();
+  });
+
+  it('returns the stored message content for a known key', async () => {
+    const stored = { key, message: { conversation: 'hello' } };
+    const service = buildService(async () => [stored]);
+
+    await expect(service.getMessage(key)).resolves.toEqual({ conversation: 'hello' });
+    await expect(service.getMessage(key, true)).resolves.toEqual(stored);
+  });
+
+  it('returns the poll secret for a stored poll creation', async () => {
+    const pollCreationMessage = { name: 'poll', options: [{ optionName: 'a' }] };
+    const service = buildService(async () => [
+      { key, message: { pollCreationMessage, messageContextInfo: { messageSecret: 'c2VjcmV0' } } },
+    ]);
+
+    const result = await service.getMessage(key);
+
+    expect(result.pollCreationMessage).toEqual(pollCreationMessage);
+    expect(Buffer.from(result.messageContextInfo.messageSecret).toString()).toBe('secret');
+  });
+});

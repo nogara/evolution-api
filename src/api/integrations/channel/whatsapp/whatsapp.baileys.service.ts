@@ -561,6 +561,9 @@ export class BaileysStartupService extends ChannelStartupService {
       if (full) {
         return webMessageInfo[0];
       }
+      if (!webMessageInfo[0]) {
+        return undefined;
+      }
       if (webMessageInfo[0].message?.pollCreationMessage) {
         const messageSecretBase64 = webMessageInfo[0].message?.messageContextInfo?.messageSecret;
 
@@ -578,7 +581,7 @@ export class BaileysStartupService extends ChannelStartupService {
 
       return webMessageInfo[0].message;
     } catch {
-      return { conversation: '' };
+      return undefined;
     }
   }
 
