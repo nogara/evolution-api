@@ -280,10 +280,14 @@ export class BaileysStartupService extends ChannelStartupService {
       disconnectionReasonCode: DisconnectReason.loggedOut,
     });
 
-    await this.prismaRepository.instance.update({
-      where: { id: this.instanceId },
-      data: { connectionStatus: 'close', disconnectionAt, disconnectionReasonCode: DisconnectReason.loggedOut },
-    });
+    try {
+      await this.prismaRepository.instance.update({
+        where: { id: this.instanceId },
+        data: { connectionStatus: 'close', disconnectionAt, disconnectionReasonCode: DisconnectReason.loggedOut },
+      });
+    } catch (error) {
+      this.logger.error(['Error persisting the closed connection state on logout', error?.message]);
+    }
 
     this.sendDataWebhook(Events.CONNECTION_UPDATE, { instance: this.instance.name, ...this.stateConnection });
 

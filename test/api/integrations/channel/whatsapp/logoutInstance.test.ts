@@ -94,4 +94,17 @@ describe('BaileysStartupService.logoutInstance', () => {
       ];
     expect(sessionDeleteOrder).toBeLessThan(logoutEmitOrder);
   });
+
+  it('still removes the session and emits logout.instance when persisting the closed state fails', async () => {
+    service.prismaRepository.instance.update.mockRejectedValue(new Error('database unavailable'));
+    service.prismaRepository.session.findFirst.mockResolvedValue({ sessionId: 'instance-id' });
+    service.logger = { error: vi.fn() };
+
+    await expect(service.logoutInstance()).resolves.toBeUndefined();
+
+    expect(service.connectionStatus).toEqual({ state: 'close', statusReason: 401 });
+    expect(service.prismaRepository.session.delete).toHaveBeenCalledWith({ where: { sessionId: 'instance-id' } });
+    expect(logoutEmits(service)).toHaveLength(1);
+    expect(service.logger.error).toHaveBeenCalled();
+  });
 });
