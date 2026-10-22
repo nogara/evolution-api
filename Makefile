@@ -3,7 +3,7 @@
 
 IMAGE ?= evolution-in-purple:dev
 
-.PHONY: help install dev build lint typecheck check-docs hooks-install docker-build _guard-not-prod
+.PHONY: help install dev build lint test typecheck check-docs hooks-install docker-build _guard-not-prod
 
 help: ## Show available targets
 	@grep -hE '^[a-zA-Z][a-zA-Z_-]*:.*## ' $(MAKEFILE_LIST) | \
@@ -20,6 +20,9 @@ build: ## Typecheck and build to dist/ (npm run build)
 
 lint: ## ESLint with auto-fix (npm run lint)
 	npm run lint
+
+test: ## Run the unit tests once (npm test)
+	npm test
 
 typecheck: ## TypeScript check without emit
 	npx --no tsc --noEmit

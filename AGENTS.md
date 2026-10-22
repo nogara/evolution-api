@@ -31,8 +31,8 @@ and **stenfar**. Anything they consume is a public contract.
 ## Commands & danger zones
 
 - **Local / safe:** `npm run dev:server` (tsx watch), `npm start`, `npm run build` (`tsc --noEmit && tsup`),
-  `npm run lint:check`, `npx tsc --noEmit`, `make check-docs`, `npm run db:generate`,
-  `docker-compose -f docker-compose.dev.yaml up -d`.
+  `npm test` (Vitest, `test/**/*.test.ts`), `npm run lint:check`, `npx tsc --noEmit`, `make check-docs`,
+  `npm run db:generate`, `docker-compose -f docker-compose.dev.yaml up -d`.
 - **Database:** always `export DATABASE_PROVIDER=postgresql` (or `mysql`) first. `npm run db:migrate:dev`
   only against a local database. Every schema change ships migrations for BOTH providers.
 - **PROD — never without explicit user approval:** `npm run db:deploy`, image publish workflows, any deploy,
@@ -117,9 +117,11 @@ ODD (gentle-ai) is the workflow; its protocol is not repeated here. What this re
 
 ## Verification
 
-There is no test suite yet (`npm test` is an upstream placeholder). Before handing off a change, run:
+Unit tests use Vitest and live in `test/`, mirroring `src/` (e.g. `test/utils/createJid.test.ts`). They cover
+how our code processes data; Baileys is mocked where it touches the socket. Before handing off a change, run:
 
 ```bash
+npm test
 npx tsc --noEmit
 npm run build
 npm run lint:check
