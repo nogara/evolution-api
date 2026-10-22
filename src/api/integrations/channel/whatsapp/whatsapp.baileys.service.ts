@@ -1067,7 +1067,6 @@ export class BaileysStartupService extends ChannelStartupService {
 
         const messagesRaw: any[] = [];
         const seenInBatch = new Map<string, MessageDedupeMark>();
-        const storedKeys: proto.IMessageKey[] = [];
 
         const messagesRepository: Set<string> = new Set(
           chatwootImport.getRepositoryMessagesCache(instance) ??
@@ -1124,7 +1123,6 @@ export class BaileysStartupService extends ChannelStartupService {
           }
 
           messagesRaw.push(this.prepareMessage(m));
-          storedKeys.push(m.key);
         }
 
         this.sendDataWebhook(Events.MESSAGES_SET, [...messagesRaw], true, undefined, {
@@ -1134,10 +1132,6 @@ export class BaileysStartupService extends ChannelStartupService {
 
         if (this.configService.get<Database>('DATABASE').SAVE_DATA.HISTORIC) {
           await this.prismaRepository.message.createMany({ data: messagesRaw, skipDuplicates: true });
-        }
-
-        for (const storedKey of storedKeys) {
-          await this.markMessageSeen(storedKey);
         }
 
         if (
@@ -2516,10 +2510,6 @@ export class BaileysStartupService extends ChannelStartupService {
       }
 
       const messageRaw = this.prepareMessage(messageSent);
-
-      if (messageSent?.key) {
-        await this.markMessageSeen(messageSent.key);
-      }
 
       const isMedia =
         messageSent?.message?.imageMessage ||

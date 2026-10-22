@@ -182,15 +182,25 @@ describe('messages.upsert dedupe', () => {
     expect(storedHistoryRows(prismaRepository)).toHaveLength(2);
   });
 
-  it('skips a live redelivery of a message stored by history sync', async () => {
+  it('still delivers a live message first seen by history sync', async () => {
     const { service, prismaRepository } = buildService();
     const received = message({ remoteJid: '5491123456789@s.whatsapp.net' });
 
     await syncHistory(service, [received]);
     await deliver(service, received);
 
-    expect(storedHistoryRows(prismaRepository)).toHaveLength(1);
-    expect(prismaRepository.message.create).not.toHaveBeenCalled();
+    expect(prismaRepository.message.create).toHaveBeenCalledTimes(1);
+    expect(upsertWebhooks(service)).toHaveLength(1);
+  });
+
+  it('does not store again in history sync a message already delivered live', async () => {
+    const { service, prismaRepository } = buildService();
+    const received = message({ remoteJid: '5491123456789@s.whatsapp.net' });
+
+    await deliver(service, received);
+    await syncHistory(service, [received]);
+
+    expect(storedHistoryRows(prismaRepository)).toHaveLength(0);
   });
 
   it('processes a live delivery when storing the history batch failed', async () => {
