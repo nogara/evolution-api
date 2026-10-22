@@ -1,5 +1,20 @@
 # evolution-in-purple
 
+## 0.1.1 (2026-10-22)
+
+### Fixes
+
+* **Logout state**: `logoutInstance` closes the connection state (401), persists it and sends `STATUS_INSTANCE` and `CONNECTION_UPDATE` immediately instead of ~40s later; `logout.instance` is emitted after the Session row is removed and the late Baileys close is ignored (#9)
+* **Argentine JIDs**: `createJid` keeps the mobile 9 (`549…`); the third-digit removal now applies only to Mexico (#10)
+* **"Waiting for this message"**: `getMessage` returns no message for unknown keys, so Baileys stops resending an empty message on retry receipts (#11; upstream evolution-foundation/evolution-api#2705, #2706, #1934)
+* **Duplicate messages**: live `messages.upsert` stores and emits each message once per recipient, deduping redeliveries and `@lid`/phone copies through the baileys cache; history sync no longer re-stores live messages (#12; upstream evolution-foundation/evolution-api#2737, #2675)
+* **onWhatsapp cache**: unique-constraint races in `saveOnWhatsappCache` retry and merge instead of dropping data, and cache JIDs get a single domain (#13)
+* **Baileys memory**: one shared `AsyncLocalStorage` for signal key transactions instead of one per socket, stopping growth with every reconnect (#14; port of WhiskeySockets/Baileys#2722)
+
+### Chores
+
+* Release images are no longer tagged `latest` (#8)
+
 ## 0.1.0 (2026-10-21)
 
 ### Fixes
