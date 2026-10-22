@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from 'async_hooks';
 import { addTransactionCapability, SignalKeyStore } from 'baileys';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const silentLogger = (): any => ({
   level: 'silent',
@@ -43,6 +43,36 @@ const read = async (store: SignalKeyStore, id = '1') => (await store.get('app-st
 const write = (keyId: number, id = '1') => ({ 'app-state-sync-key': { [id]: { keyId } } }) as any;
 
 describe('addTransactionCapability isolation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('keeps concurrent transactions of different stores isolated', async () => {
+    const backingA = makeInMemoryStore();
+    const backingB = makeInMemoryStore();
+    const a = addTransactionCapability(backingA, silentLogger(), opts);
+    const b = addTransactionCapability(backingB, silentLogger(), opts);
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+    await Promise.all([
+      a.transaction(async () => {
+        await a.set(write(1));
+        await tick();
+        expect(await read(a)).toMatchObject({ keyId: 1 });
+        await tick();
+      }, 'key'),
+      b.transaction(async () => {
+        await tick();
+        await b.set(write(2));
+        expect(await read(b)).toMatchObject({ keyId: 2 });
+        await tick();
+      }, 'key'),
+    ]);
+
+    expect(await read(backingA)).toMatchObject({ keyId: 1 });
+    expect(await read(backingB)).toMatchObject({ keyId: 2 });
+  });
+
   it('writes to store B inside a transaction of store A go to B only', async () => {
     const backingA = makeInMemoryStore();
     const backingB = makeInMemoryStore();
