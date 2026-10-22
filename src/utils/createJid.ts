@@ -1,15 +1,8 @@
-// Check if the number is MX or AR
-function formatMXOrARNumber(jid: string): string {
-  const countryCode = jid.substring(0, 2);
-
-  if (Number(countryCode) === 52 || Number(countryCode) === 54) {
-    if (jid.length === 13) {
-      const number = countryCode + jid.substring(3);
-      return number;
-    }
-
-    return jid;
+function formatMXNumber(jid: string): string {
+  if (jid.startsWith('52') && jid.length === 13) {
+    return jid.substring(0, 2) + jid.substring(3);
   }
+
   return jid;
 }
 
@@ -63,7 +56,7 @@ export function createJid(number: string): string {
     return `${number}@g.us`;
   }
 
-  number = formatMXOrARNumber(number);
+  number = formatMXNumber(number);
 
   number = formatBRNumber(number);
 
