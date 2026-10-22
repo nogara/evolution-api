@@ -124,12 +124,21 @@ describe('findBotByTrigger', () => {
     expect((await findBotByTrigger(repository, 'aba', 'inst'))?.id).toBe('re');
   });
 
-  it('throws when a stored regex is invalid', async () => {
+  it('KNOWN BUG: rejects the whole lookup when a stored regex is invalid (current behavior)', async () => {
     const repository = createRepository([
       { id: 're', triggerType: 'keyword', triggerOperator: 'regex', triggerValue: '(' },
     ]);
 
     await expect(findBotByTrigger(repository, 'x', 'inst')).rejects.toThrow(SyntaxError);
+  });
+
+  it.fails('skips a bot with an invalid stored regex and keeps searching', async () => {
+    const repository = createRepository([
+      { id: 're', triggerType: 'keyword', triggerOperator: 'regex', triggerValue: '(' },
+      { id: 'ct', triggerType: 'keyword', triggerOperator: 'contains', triggerValue: 'x' },
+    ]);
+
+    expect((await findBotByTrigger(repository, 'x', 'inst'))?.id).toBe('ct');
   });
 
   it('returns null when nothing matches', async () => {

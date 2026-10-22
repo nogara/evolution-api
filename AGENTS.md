@@ -131,6 +131,11 @@ make check-docs      # docs drift guard (pointers, skill frontmatter)
 Behavior that needs a real WhatsApp account (pairing, sending, receiving) requires a human with a phone;
 report it as unverified rather than faking it. When tests are added, they ship with the behavior.
 
+Known bugs in tests: a test that pins buggy behavior is named `it('KNOWN BUG: <what is wrong> (current behavior)')`
+and sits next to an `it.fails('<correct contract>')` asserting the intended behavior. When you fix the bug, the
+`it.fails` starts failing; replace both with one normal test for the correct contract. Skip the `it.fails` only when
+the correct contract is unclear (e.g. Argentine/Mexican numbers in `createJid`).
+
 ## Documentation conventions
 
 1. This file is an index: hard rules + pointers. Implementation detail goes to skills.

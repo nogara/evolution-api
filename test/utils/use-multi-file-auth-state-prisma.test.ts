@@ -192,7 +192,7 @@ describe('useMultiFileAuthStatePrisma', () => {
     });
   });
 
-  it('removes only the database creds on removeCreds without redis and leaves key files behind', async () => {
+  it('KNOWN BUG: leaves local key files behind on removeCreds without redis (current behavior)', async () => {
     const { state, removeCreds } = await open();
     await state.keys.set({ session: { a: Buffer.from([1]) } });
 
@@ -203,7 +203,17 @@ describe('useMultiFileAuthStatePrisma', () => {
     expect(lastLogger().info).toHaveBeenCalledWith({ action: 'auth.key.delete', sessionId: 'session' });
   });
 
-  it('clears the redis hash but keeps the database creds on removeCreds with redis', async () => {
+  it.fails('removes the database creds and local key files on removeCreds without redis', async () => {
+    const { state, removeCreds } = await open();
+    await state.keys.set({ session: { a: Buffer.from([1]) } });
+
+    await removeCreds();
+
+    expect(mocks.sessions.has('session')).toBe(false);
+    expect(mocks.files.size).toBe(0);
+  });
+
+  it('KNOWN BUG: keeps the database creds on removeCreds with redis (current behavior)', async () => {
     mocks.cacheConf.REDIS.ENABLED = true;
     const { state, removeCreds } = await open();
     await state.keys.set({ session: { a: Buffer.from([1]) } });
@@ -213,6 +223,17 @@ describe('useMultiFileAuthStatePrisma', () => {
     expect(cache.hashes.has('session')).toBe(false);
     expect(mocks.sessions.has('session')).toBe(true);
     expect(lastLogger().info).toHaveBeenCalledWith({ action: 'redis.delete', sessionId: 'session' });
+  });
+
+  it.fails('clears the redis hash and the database creds on removeCreds with redis', async () => {
+    mocks.cacheConf.REDIS.ENABLED = true;
+    const { state, removeCreds } = await open();
+    await state.keys.set({ session: { a: Buffer.from([1]) } });
+
+    await removeCreds();
+
+    expect(cache.hashes.has('session')).toBe(false);
+    expect(mocks.sessions.has('session')).toBe(false);
   });
 
   it('logs the redis failure and falls back to deleting database creds', async () => {
@@ -250,11 +271,18 @@ describe('useMultiFileAuthStatePrisma', () => {
     expect(lastLogger().error).not.toHaveBeenCalled();
   });
 
-  it('propagates local file write errors from keys.set', async () => {
+  it('KNOWN BUG: rejects keys.set when a local file write fails (current behavior)', async () => {
     const { state } = await open();
     vi.mocked(fs.writeFile).mockRejectedValueOnce(new Error('disk full'));
 
     await expect(state.keys.set({ session: { a: Buffer.from([1]) } })).rejects.toThrow('disk full');
+  });
+
+  it.fails('swallows local file write errors in keys.set like other storage errors', async () => {
+    const { state } = await open();
+    vi.mocked(fs.writeFile).mockRejectedValueOnce(new Error('disk full'));
+
+    await expect(state.keys.set({ session: { a: Buffer.from([1]) } })).resolves.toBeUndefined();
   });
 
   it('swallows unlink errors when removing a missing key file', async () => {

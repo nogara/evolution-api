@@ -161,7 +161,26 @@ describe('useMultiFileAuthStateRedisDb', () => {
 
     expect(logger.error).toHaveBeenCalledWith({ localError: 'readData', error });
     expect(logger.error).toHaveBeenCalledWith({ localError: 'writeData', error });
-    expect(logger.error).toHaveBeenCalledWith({ readData: 'removeData', error });
+  });
+
+  it('KNOWN BUG: logs removeData errors under a readData key (current behavior)', async () => {
+    const error = new Error('redis down');
+    cache.hDelete.mockRejectedValue(error);
+    const { state } = await open();
+
+    await state.keys.set({ session: { b: null } });
+
+    expect(lastLogger().error).toHaveBeenCalledWith({ readData: 'removeData', error });
+  });
+
+  it.fails('logs removeData errors under the localError key', async () => {
+    const error = new Error('redis down');
+    cache.hDelete.mockRejectedValue(error);
+    const { state } = await open();
+
+    await state.keys.set({ session: { b: null } });
+
+    expect(lastLogger().error).toHaveBeenCalledWith({ localError: 'removeData', error });
   });
 
   it('keeps the initial creds object when a fresh instance has nothing stored', async () => {

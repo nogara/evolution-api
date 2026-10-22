@@ -50,7 +50,11 @@ describe('advancedOperatorsSearch', () => {
     expect(advancedOperatorsSearch('time 10:30', 'endswith:10:30')).toBe(true);
   });
 
-  it('splits multi word values into separate filters', () => {
+  it('KNOWN BUG: never matches values that contain spaces (current behavior)', () => {
     expect(advancedOperatorsSearch('good morning', 'exact:good morning')).toBe(false);
+  });
+
+  it.fails('matches values that contain spaces', () => {
+    expect(advancedOperatorsSearch('good morning', 'exact:good morning')).toBe(true);
   });
 });

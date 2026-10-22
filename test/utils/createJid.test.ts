@@ -34,11 +34,11 @@ describe('createJid', () => {
     expect(createJid('12036301234567890')).toBe('12036301234567890@s.whatsapp.net');
   });
 
-  it('removes the third digit from 13 digit Argentine numbers', () => {
+  it('KNOWN BUG: removes the third digit from 13 digit Argentine numbers (current behavior)', () => {
     expect(createJid('5492616107398')).toBe('542616107398@s.whatsapp.net');
   });
 
-  it('removes the third digit from 13 digit Mexican numbers', () => {
+  it('KNOWN BUG: removes the third digit from 13 digit Mexican numbers (current behavior)', () => {
     expect(createJid('5215512345678')).toBe('525512345678@s.whatsapp.net');
   });
 

@@ -95,8 +95,12 @@ describe('getConversationMessage', () => {
     ).toBe('-32.89');
   });
 
-  it('throws for location messages without latitude', () => {
+  it('KNOWN BUG: throws for location messages without latitude (current behavior)', () => {
     expect(() => getConversationMessage({ key, message: { locationMessage: {} } })).toThrow(TypeError);
+  });
+
+  it.fails('does not throw for location messages without latitude', () => {
+    expect(() => getConversationMessage({ key, message: { locationMessage: {} } })).not.toThrow();
   });
 
   it('returns the contact display name', () => {
@@ -144,9 +148,15 @@ describe('getConversationMessage', () => {
     ).toBe('hi\nexternalAdReplyBody|Ad text');
   });
 
-  it('prefixes the message type name when the external ad reply body is the only content', () => {
+  it('KNOWN BUG: duplicates the external ad reply body when it is the only content (current behavior)', () => {
     expect(getConversationMessage({ key, message: {}, contextInfo: { externalAdReply: { body: 'Ad' } } })).toBe(
       'externalAdReplyBody\nexternalAdReplyBody|Ad',
+    );
+  });
+
+  it.fails('returns only the external ad reply body when it is the only content', () => {
+    expect(getConversationMessage({ key, message: {}, contextInfo: { externalAdReply: { body: 'Ad' } } })).toBe(
+      'externalAdReplyBody|Ad',
     );
   });
 

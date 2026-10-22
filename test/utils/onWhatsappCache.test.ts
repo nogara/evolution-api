@@ -91,10 +91,16 @@ describe('getOnWhatsappCache', () => {
     expect(queriedJids()).toEqual(['5215512345678@s.whatsapp.net', '525512345678@s.whatsapp.net']);
   });
 
-  it('searches other numbers without the plus sign but with the domain appended twice', async () => {
+  it('KNOWN BUG: appends the domain twice to numbers outside Brazil, Mexico and Argentina (current behavior)', async () => {
     await getOnWhatsappCache(['+15551234567@s.whatsapp.net']);
 
     expect(queriedJids()).toEqual(['15551234567@s.whatsapp.net@s.whatsapp.net']);
+  });
+
+  it.fails('searches other numbers without the plus sign and with a single domain', async () => {
+    await getOnWhatsappCache(['+15551234567@s.whatsapp.net']);
+
+    expect(queriedJids()).toEqual(['15551234567@s.whatsapp.net']);
   });
 
   it('searches lid and group jids as given', async () => {
@@ -103,10 +109,16 @@ describe('getOnWhatsappCache', () => {
     expect(queriedJids()).toEqual(['123456@lid', '5511999999999-1623281429@g.us']);
   });
 
-  it('appends an undefined domain to numbers without a domain', async () => {
+  it('KNOWN BUG: appends an undefined domain to numbers without a domain (current behavior)', async () => {
     await getOnWhatsappCache(['15551234567']);
 
     expect(queriedJids()).toEqual(['15551234567@undefined']);
+  });
+
+  it.fails('searches numbers without a domain as user jids', async () => {
+    await getOnWhatsappCache(['15551234567']);
+
+    expect(queriedJids()).toEqual(['15551234567@s.whatsapp.net']);
   });
 });
 
@@ -142,7 +154,7 @@ describe('saveOnWhatsappCache', () => {
     });
   });
 
-  it('looks up existing records by jid options and remote jid', async () => {
+  it('KNOWN BUG: looks up existing records by a jid option with the domain appended twice (current behavior)', async () => {
     await saveOnWhatsappCache([{ remoteJid: '15551234567@s.whatsapp.net' }]);
 
     expect(isOnWhatsapp.findFirst).toHaveBeenCalledWith({
@@ -151,6 +163,16 @@ describe('saveOnWhatsappCache', () => {
           { jidOptions: { contains: '15551234567@s.whatsapp.net@s.whatsapp.net' } },
           { remoteJid: '15551234567@s.whatsapp.net' },
         ],
+      },
+    });
+  });
+
+  it.fails('looks up existing records by jid options and remote jid', async () => {
+    await saveOnWhatsappCache([{ remoteJid: '15551234567@s.whatsapp.net' }]);
+
+    expect(isOnWhatsapp.findFirst).toHaveBeenCalledWith({
+      where: {
+        OR: [{ jidOptions: { contains: '15551234567@s.whatsapp.net' } }, { remoteJid: '15551234567@s.whatsapp.net' }],
       },
     });
   });
@@ -195,7 +217,7 @@ describe('saveOnWhatsappCache', () => {
     expect(isOnWhatsapp.create).not.toHaveBeenCalled();
   });
 
-  it('merges existing jid options into an update when data differs', async () => {
+  it('KNOWN BUG: merges a jid option with the domain appended twice into the update (current behavior)', async () => {
     isOnWhatsapp.findFirst.mockResolvedValue({
       id: 'r1',
       remoteJid: '15551234567@s.whatsapp.net',
@@ -210,6 +232,26 @@ describe('saveOnWhatsappCache', () => {
       data: {
         remoteJid: '15551234567@s.whatsapp.net',
         jidOptions: '15551234567@s.whatsapp.net@s.whatsapp.net,888@lid',
+        lid: null,
+      },
+    });
+  });
+
+  it.fails('merges existing jid options into an update when data differs', async () => {
+    isOnWhatsapp.findFirst.mockResolvedValue({
+      id: 'r1',
+      remoteJid: '15551234567@s.whatsapp.net',
+      jidOptions: '888@lid',
+      lid: null,
+    });
+
+    await saveOnWhatsappCache([{ remoteJid: '15551234567@s.whatsapp.net' }]);
+
+    expect(isOnWhatsapp.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: {
+        remoteJid: '15551234567@s.whatsapp.net',
+        jidOptions: '15551234567@s.whatsapp.net,888@lid',
         lid: null,
       },
     });

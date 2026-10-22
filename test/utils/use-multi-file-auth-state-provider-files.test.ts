@@ -75,7 +75,7 @@ describe('AuthStateProvider', () => {
     );
   });
 
-  it('returns creds as an unparsed string when the provider responds with raw text', async () => {
+  it('KNOWN BUG: returns creds as an unparsed string when the provider responds with raw text (current behavior)', async () => {
     const first = await open();
     await first.saveCreds();
     providerFiles.parseResponses = false;
@@ -83,6 +83,16 @@ describe('AuthStateProvider', () => {
     const second = await open();
 
     expect(typeof second.state.creds).toBe('string');
+  });
+
+  it.fails('parses creds when the provider responds with raw text', async () => {
+    const first = await open();
+    await first.saveCreds();
+    providerFiles.parseResponses = false;
+
+    const second = await open();
+
+    expect(second.state.creds).toEqual(first.state.creds);
   });
 
   it('round trips pre-keys and sessions through serialized storage', async () => {
@@ -160,7 +170,7 @@ describe('AuthStateProvider', () => {
     expect(mocks.loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
   });
 
-  it('swallows read, write and delete errors without logging them', async () => {
+  it('KNOWN BUG: swallows read, write and delete errors without logging them (current behavior)', async () => {
     const error = new Error('provider down');
     providerFiles.read.mockResolvedValue([{ status: 500 }, error]);
     providerFiles.write.mockResolvedValue([{ status: 500 }, error]);
@@ -179,5 +189,21 @@ describe('AuthStateProvider', () => {
       expect(logger.error).not.toHaveBeenCalled();
       expect(logger.info).not.toHaveBeenCalled();
     }
+  });
+
+  it.fails('logs read, write and delete errors', async () => {
+    const error = new Error('provider down');
+    providerFiles.read.mockResolvedValue([{ status: 500 }, error]);
+    providerFiles.write.mockResolvedValue([{ status: 500 }, error]);
+    providerFiles.delete.mockResolvedValue([{ status: 500 }, error]);
+    providerFiles.removeSession.mockResolvedValue([{ status: 500 }, error]);
+
+    const { state, saveCreds, removeCreds } = await open();
+    await saveCreds();
+    await state.keys.set({ session: { a: Buffer.from([1]), b: null } });
+    await state.keys.get('session', ['a']);
+    await removeCreds();
+
+    expect(mocks.loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
   });
 });
