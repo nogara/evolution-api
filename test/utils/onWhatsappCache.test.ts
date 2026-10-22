@@ -335,4 +335,29 @@ describe('saveOnWhatsappCache with concurrent writers', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].jidOptions.split(',')).toContain('999@lid');
   });
+
+  it('does not retry a create that fails for another reason', async () => {
+    isOnWhatsapp.create.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(saveOnWhatsappCache([{ remoteJid: '5491123456789@s.whatsapp.net' }])).resolves.toBeUndefined();
+
+    expect(isOnWhatsapp.create).toHaveBeenCalledTimes(1);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('keeps saving other jids when the retry also fails', async () => {
+    const conflictingJid = '5491123456789@s.whatsapp.net';
+    const createRow = isOnWhatsapp.create.getMockImplementation();
+    isOnWhatsapp.create.mockImplementation(async (args) => {
+      if (args.data.remoteJid === conflictingJid) throw uniqueViolation();
+      return createRow(args);
+    });
+
+    await expect(
+      saveOnWhatsappCache([{ remoteJid: conflictingJid }, { remoteJid: '5491187654321@s.whatsapp.net' }]),
+    ).resolves.toBeUndefined();
+
+    expect(isOnWhatsapp.create.mock.calls.filter(([args]) => args.data.remoteJid === conflictingJid)).toHaveLength(2);
+    expect(rows.map((row) => row.remoteJid)).toEqual(['5491187654321@s.whatsapp.net']);
+  });
 });
