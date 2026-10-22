@@ -963,6 +963,10 @@ export class BaileysStartupService extends ChannelStartupService {
   };
 
   private async isDuplicateMessage(key: MessageDedupeKeyInput): Promise<boolean> {
+    if (!key?.id) {
+      return false;
+    }
+
     try {
       const seen = await this.baileysCache.get(messageDedupeKey(this.instanceId, key));
       return !shouldProcessMessage(seen, key);
@@ -973,6 +977,10 @@ export class BaileysStartupService extends ChannelStartupService {
   }
 
   private async markMessageSeen(key: MessageDedupeKeyInput): Promise<void> {
+    if (!key?.id) {
+      return;
+    }
+
     try {
       await this.baileysCache.set(
         messageDedupeKey(this.instanceId, key),
@@ -1057,6 +1065,8 @@ export class BaileysStartupService extends ChannelStartupService {
         }
 
         const messagesRaw: any[] = [];
+        const seenInBatch = new Set<string>();
+        const storedKeys: proto.IMessageKey[] = [];
 
         const messagesRepository: Set<string> = new Set(
           chatwootImport.getRepositoryMessagesCache(instance) ??
@@ -1091,8 +1101,16 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
-          if (messagesRepository?.has(m.key.id) || (await this.isDuplicateMessage(m.key))) {
+          const batchDedupeKey = m.key.id ? messageDedupeKey(this.instanceId, m.key) : undefined;
+          if (
+            messagesRepository?.has(m.key.id) ||
+            (batchDedupeKey && seenInBatch.has(batchDedupeKey)) ||
+            (await this.isDuplicateMessage(m.key))
+          ) {
             continue;
+          }
+          if (batchDedupeKey) {
+            seenInBatch.add(batchDedupeKey);
           }
 
           if (!m.pushName && !m.key.fromMe) {
@@ -1104,8 +1122,8 @@ export class BaileysStartupService extends ChannelStartupService {
             }
           }
 
-          await this.markMessageSeen(m.key);
           messagesRaw.push(this.prepareMessage(m));
+          storedKeys.push(m.key);
         }
 
         this.sendDataWebhook(Events.MESSAGES_SET, [...messagesRaw], true, undefined, {
@@ -1115,6 +1133,10 @@ export class BaileysStartupService extends ChannelStartupService {
 
         if (this.configService.get<Database>('DATABASE').SAVE_DATA.HISTORIC) {
           await this.prismaRepository.message.createMany({ data: messagesRaw, skipDuplicates: true });
+        }
+
+        for (const storedKey of storedKeys) {
+          await this.markMessageSeen(storedKey);
         }
 
         if (

@@ -14,6 +14,10 @@ vi.mock('@utils/onWhatsappCache', () => ({
 
 vi.mock('@utils/sendTelemetry', () => ({ sendTelemetry: vi.fn() }));
 
+vi.mock('@api/integrations/chatbot/chatwoot/utils/chatwoot-import-helper', () => ({
+  chatwootImport: { getRepositoryMessagesCache: vi.fn(() => null), setRepositoryMessagesCache: vi.fn() },
+}));
+
 const buildCache = () => {
   const store = new Map<string, unknown>();
   return {
@@ -28,15 +32,19 @@ const buildCache = () => {
 const buildService = (baileysCache = buildCache()) => {
   const config: Record<string, unknown> = {
     LOG: { BAILEYS: 'error' },
-    DATABASE: { SAVE_DATA: { NEW_MESSAGE: true, CHATS: false, CONTACTS: false } },
+    DATABASE: { SAVE_DATA: { NEW_MESSAGE: true, HISTORIC: true, CHATS: false, CONTACTS: false } },
     CHATWOOT: { ENABLED: false },
     OPENAI: { ENABLED: false },
     S3: { ENABLE: false },
   };
   const configService = { get: vi.fn((key: string) => config[key]) } as any;
   const prismaRepository = {
-    chat: { findFirst: vi.fn(async () => null) },
-    message: { create: vi.fn(async ({ data }) => ({ id: 'row-id', ...data })) },
+    chat: { findFirst: vi.fn(async () => null), findMany: vi.fn(async () => []), createMany: vi.fn(async () => ({})) },
+    message: {
+      create: vi.fn(async ({ data }) => ({ id: 'row-id', ...data })),
+      createMany: vi.fn(async () => ({})),
+      findMany: vi.fn(async () => []),
+    },
     contact: { findFirst: vi.fn(async () => null) },
   } as any;
   const service = new BaileysStartupService(
@@ -55,6 +63,7 @@ const buildService = (baileysCache = buildCache()) => {
   service.updateMessagesReadedByTimestamp = vi.fn(async () => undefined);
   service.updateChatUnreadMessages = vi.fn(async () => undefined);
   service.client = { readMessages: vi.fn() };
+  service.contactHandle = { 'contacts.upsert': vi.fn(async () => undefined) };
   return { service, prismaRepository, baileysCache };
 };
 
@@ -67,6 +76,12 @@ const message = (key: Record<string, unknown>) => ({
 
 const upsertWebhooks = (service: any) =>
   service.sendDataWebhook.mock.calls.filter(([event]) => event === Events.MESSAGES_UPSERT);
+
+const syncHistory = (service: any, messages: unknown[]) =>
+  service.messageHandle['messaging-history.set']({ messages, chats: [], contacts: [], isLatest: true, progress: 100 });
+
+const storedHistoryRows = (prismaRepository: any) =>
+  prismaRepository.message.createMany.mock.calls.flatMap(([{ data }]) => data);
 
 const deliver = (service: any, received: unknown) =>
   service.messageHandle['messages.upsert']({ messages: [received], type: 'notify' }, {});
@@ -134,5 +149,47 @@ describe('messages.upsert dedupe', () => {
 
     expect(prismaRepository.message.create).toHaveBeenCalledTimes(1);
     expect(upsertWebhooks(service)).toHaveLength(1);
+  });
+
+  it('processes every message that has no id', async () => {
+    const { service, prismaRepository } = buildService();
+
+    await deliver(service, message({ id: undefined, remoteJid: '5491123456789@s.whatsapp.net' }));
+    await deliver(service, message({ id: undefined, remoteJid: '5491187654321@s.whatsapp.net' }));
+
+    expect(prismaRepository.message.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('stores a history message delivered with lid and phone jids once', async () => {
+    const { service, prismaRepository } = buildService();
+
+    await syncHistory(service, [
+      message({ remoteJid: '123456789@lid', remoteJidAlt: '5491123456789@s.whatsapp.net' }),
+      message({ remoteJid: '5491123456789@s.whatsapp.net' }),
+    ]);
+
+    expect(storedHistoryRows(prismaRepository)).toHaveLength(1);
+  });
+
+  it('skips a live redelivery of a message stored by history sync', async () => {
+    const { service, prismaRepository } = buildService();
+    const received = message({ remoteJid: '5491123456789@s.whatsapp.net' });
+
+    await syncHistory(service, [received]);
+    await deliver(service, received);
+
+    expect(storedHistoryRows(prismaRepository)).toHaveLength(1);
+    expect(prismaRepository.message.create).not.toHaveBeenCalled();
+  });
+
+  it('processes a live delivery when storing the history batch failed', async () => {
+    const { service, prismaRepository } = buildService();
+    prismaRepository.message.createMany.mockRejectedValueOnce(new Error('database unavailable'));
+    const received = message({ remoteJid: '5491123456789@s.whatsapp.net' });
+
+    await syncHistory(service, [received]);
+    await deliver(service, received);
+
+    expect(prismaRepository.message.create).toHaveBeenCalledTimes(1);
   });
 });
