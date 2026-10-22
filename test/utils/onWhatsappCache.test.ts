@@ -90,13 +90,7 @@ describe('getOnWhatsappCache', () => {
     expect(queriedJids()).toEqual(['5215512345678@s.whatsapp.net', '525512345678@s.whatsapp.net']);
   });
 
-  it('KNOWN BUG: appends the domain twice to numbers outside Brazil, Mexico and Argentina (current behavior)', async () => {
-    await getOnWhatsappCache(['+15551234567@s.whatsapp.net']);
-
-    expect(queriedJids()).toEqual(['15551234567@s.whatsapp.net@s.whatsapp.net']);
-  });
-
-  it.fails('searches other numbers without the plus sign and with a single domain', async () => {
+  it('searches other numbers without the plus sign and with a single domain', async () => {
     await getOnWhatsappCache(['+15551234567@s.whatsapp.net']);
 
     expect(queriedJids()).toEqual(['15551234567@s.whatsapp.net']);
@@ -108,13 +102,7 @@ describe('getOnWhatsappCache', () => {
     expect(queriedJids()).toEqual(['123456@lid', '5511999999999-1623281429@g.us']);
   });
 
-  it('KNOWN BUG: appends an undefined domain to numbers without a domain (current behavior)', async () => {
-    await getOnWhatsappCache(['15551234567']);
-
-    expect(queriedJids()).toEqual(['15551234567@undefined']);
-  });
-
-  it.fails('searches numbers without a domain as user jids', async () => {
+  it('searches numbers without a domain as user jids', async () => {
     await getOnWhatsappCache(['15551234567']);
 
     expect(queriedJids()).toEqual(['15551234567@s.whatsapp.net']);
@@ -153,20 +141,7 @@ describe('saveOnWhatsappCache', () => {
     });
   });
 
-  it('KNOWN BUG: looks up existing records by a jid option with the domain appended twice (current behavior)', async () => {
-    await saveOnWhatsappCache([{ remoteJid: '15551234567@s.whatsapp.net' }]);
-
-    expect(isOnWhatsapp.findFirst).toHaveBeenCalledWith({
-      where: {
-        OR: [
-          { jidOptions: { contains: '15551234567@s.whatsapp.net@s.whatsapp.net' } },
-          { remoteJid: '15551234567@s.whatsapp.net' },
-        ],
-      },
-    });
-  });
-
-  it.fails('looks up existing records by jid options and remote jid', async () => {
+  it('looks up existing records by jid options and remote jid', async () => {
     await saveOnWhatsappCache([{ remoteJid: '15551234567@s.whatsapp.net' }]);
 
     expect(isOnWhatsapp.findFirst).toHaveBeenCalledWith({
@@ -276,27 +251,7 @@ describe('saveOnWhatsappCache', () => {
     });
   });
 
-  it('KNOWN BUG: merges a jid option with the domain appended twice into the update (current behavior)', async () => {
-    isOnWhatsapp.findFirst.mockResolvedValue({
-      id: 'r1',
-      remoteJid: '15551234567@s.whatsapp.net',
-      jidOptions: '888@lid',
-      lid: null,
-    });
-
-    await saveOnWhatsappCache([{ remoteJid: '15551234567@s.whatsapp.net' }]);
-
-    expect(isOnWhatsapp.update).toHaveBeenCalledWith({
-      where: { id: 'r1' },
-      data: {
-        remoteJid: '15551234567@s.whatsapp.net',
-        jidOptions: '15551234567@s.whatsapp.net@s.whatsapp.net,888@lid',
-        lid: null,
-      },
-    });
-  });
-
-  it.fails('merges existing jid options into an update when data differs', async () => {
+  it('merges existing jid options into an update when data differs', async () => {
     isOnWhatsapp.findFirst.mockResolvedValue({
       id: 'r1',
       remoteJid: '15551234567@s.whatsapp.net',
@@ -323,5 +278,86 @@ describe('saveOnWhatsappCache', () => {
       saveOnWhatsappCache([{ remoteJid: '111@s.whatsapp.net' }, { remoteJid: '222@s.whatsapp.net' }]),
     ).resolves.toBeUndefined();
     expect(isOnWhatsapp.create).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('saveOnWhatsappCache with concurrent writers', () => {
+  const rows: { id: string; remoteJid: string; jidOptions: string; lid: string | null }[] = [];
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  const uniqueViolation = () =>
+    Object.assign(new Error('Unique constraint failed on the fields: (`remoteJid`)'), { code: 'P2002' });
+
+  beforeEach(() => {
+    rows.length = 0;
+    mocks.database.SAVE_DATA.IS_ON_WHATSAPP = true;
+    isOnWhatsapp.findFirst.mockImplementation(async ({ where }) => {
+      await tick();
+      return (
+        rows.find((row) =>
+          where.OR.some((clause: any) =>
+            clause.remoteJid ? row.remoteJid === clause.remoteJid : row.jidOptions.includes(clause.jidOptions.contains),
+          ),
+        ) ?? null
+      );
+    });
+    isOnWhatsapp.create.mockImplementation(async ({ data }) => {
+      await tick();
+      if (rows.some((row) => row.remoteJid === data.remoteJid)) throw uniqueViolation();
+      const row = { id: `row-${rows.length}`, ...data };
+      rows.push(row);
+      return row;
+    });
+    isOnWhatsapp.update.mockImplementation(async ({ where, data }) => {
+      await tick();
+      const row = rows.find((candidate) => candidate.id === where.id);
+      Object.assign(row, data);
+      return row;
+    });
+  });
+
+  it('saves a jid repeated in one batch as a single record without errors', async () => {
+    await saveOnWhatsappCache([
+      { remoteJid: '5491123456789@s.whatsapp.net' },
+      { remoteJid: '5491123456789@s.whatsapp.net', remoteJidAlt: '999@lid' },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].jidOptions.split(',')).toContain('999@lid');
+  });
+
+  it('saves the same jid from concurrent calls as a single record', async () => {
+    await Promise.all([
+      saveOnWhatsappCache([{ remoteJid: '5491123456789@s.whatsapp.net' }]),
+      saveOnWhatsappCache([{ remoteJid: '5491123456789@s.whatsapp.net', remoteJidAlt: '999@lid' }]),
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].jidOptions.split(',')).toContain('999@lid');
+  });
+
+  it('does not retry a create that fails for another reason', async () => {
+    isOnWhatsapp.create.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(saveOnWhatsappCache([{ remoteJid: '5491123456789@s.whatsapp.net' }])).resolves.toBeUndefined();
+
+    expect(isOnWhatsapp.create).toHaveBeenCalledTimes(1);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('keeps saving other jids when the retry also fails', async () => {
+    const conflictingJid = '5491123456789@s.whatsapp.net';
+    const createRow = isOnWhatsapp.create.getMockImplementation();
+    isOnWhatsapp.create.mockImplementation(async (args) => {
+      if (args.data.remoteJid === conflictingJid) throw uniqueViolation();
+      return createRow(args);
+    });
+
+    await expect(
+      saveOnWhatsappCache([{ remoteJid: conflictingJid }, { remoteJid: '5491187654321@s.whatsapp.net' }]),
+    ).resolves.toBeUndefined();
+
+    expect(isOnWhatsapp.create.mock.calls.filter(([args]) => args.data.remoteJid === conflictingJid)).toHaveLength(2);
+    expect(rows.map((row) => row.remoteJid)).toEqual(['5491187654321@s.whatsapp.net']);
   });
 });
