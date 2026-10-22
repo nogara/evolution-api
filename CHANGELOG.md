@@ -1,11 +1,20 @@
 # evolution-in-purple
 
-## 0.1.0 (Unreleased)
+## 0.1.0 (2026-10-21)
+
+### Fixes
+
+* **Device pairing**: Baileys `7.0.0-rc.9` → `7.0.0-rc14` with a `patch-package` patch that handles WhatsApp's `companion_reg_refresh` notification and guards `link_code_companion_reg` without crypto fields, fixing intermittent "Couldn't link device" failures. rc14 also fixes CVE-2026-48063 (#4; backport of upstream evolution-foundation/evolution-api#2759, `5cdf3240`, vendoring WhiskeySockets/Baileys#2765 and #2602)
+* **App-state sync keys**: the Prisma, Redis and provider-files auth states restore `app-state-sync-key` with `AppStateSyncKeyData.fromObject` so base64 key data is converted back to bytes (#5; upstream evolution-foundation/evolution-api#2685, `65b5acf3`)
+* **Instance auth**: instance routes authorize the path `instanceName` and ignore a query override, preventing cross-instance access (#2; adapted from upstream evolution-foundation/evolution-api#2549, `7a55a2bf`)
 
 ### Chores
 
 * Fork baseline from Evolution API 2.3.7
 * Agentic setup: AGENTS.md, Claude skills and hooks, docs drift check, Makefile, fork CI (`purple-checks.yml`) and GHCR publishing on `v*` tags
+* Vitest unit suite (150 tests) for our own data processing, run shuffled in CI with type-checking and linting; known bugs pinned as `KNOWN BUG` + `it.fails` (#6)
+* `@lid` → phone JID resolution for `MESSAGES_UPSERT` extracted to `resolvePhoneRemoteJid`, behavior unchanged (#6)
+* `lint-staged` 17 and CI on Node 24; dependency review allows GHSA-vfj7-8cjw-p6xm (`braces`, no patched release, reached only via `patch-package` at install time) (#6)
 
 # Upstream Evolution API changelog
 
