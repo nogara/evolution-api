@@ -26,7 +26,6 @@ describe('getOnWhatsappCache', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-15T12:00:00.000Z'));
-    vi.clearAllMocks();
     mocks.database.SAVE_DATA.IS_ON_WHATSAPP = true;
     mocks.database.SAVE_DATA.IS_ON_WHATSAPP_DAYS = 7;
     isOnWhatsapp.findMany.mockResolvedValue([]);
@@ -113,7 +112,6 @@ describe('getOnWhatsappCache', () => {
 
 describe('saveOnWhatsappCache', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     mocks.database.SAVE_DATA.IS_ON_WHATSAPP = true;
     isOnWhatsapp.findFirst.mockResolvedValue(null);
   });

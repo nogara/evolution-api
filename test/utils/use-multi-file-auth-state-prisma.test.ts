@@ -92,7 +92,6 @@ describe('useMultiFileAuthStatePrisma', () => {
   let cache: ReturnType<typeof createCache>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     mocks.sessions.clear();
     mocks.files.clear();
     mocks.cacheConf.REDIS.ENABLED = false;

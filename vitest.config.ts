@@ -18,5 +18,9 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'node',
+    restoreMocks: true,
+    unstubEnvs: true,
+    unstubGlobals: true,
+    sequence: { shuffle: true },
   },
 });

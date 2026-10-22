@@ -47,7 +47,6 @@ describe('AuthStateProvider', () => {
   let providerFiles: ReturnType<typeof createProviderFiles>;
 
   beforeEach(() => {
-    vi.clearAllMocks();
     providerFiles = createProviderFiles();
   });
 
