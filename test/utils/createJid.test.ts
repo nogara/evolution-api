@@ -12,6 +12,15 @@ describe('createJid', () => {
   it('strips the device suffix before passing a jid through', () => {
     expect(createJid('5511987654321:12@s.whatsapp.net')).toBe('5511987654321@s.whatsapp.net');
     expect(createJid('123456789:3@lid')).toBe('123456789@lid');
+    expect(createJid('status:1@broadcast')).toBe('status@broadcast');
+  });
+
+  it('drops unknown domains and builds a user jid', () => {
+    expect(createJid('15551234567@x1.net')).toBe('15551234567@s.whatsapp.net');
+  });
+
+  it('treats dashed ids shorter than 24 characters as numbers', () => {
+    expect(createJid('123-456')).toBe('123456@s.whatsapp.net');
   });
 
   it('removes plus signs, spaces and parentheses from plain numbers', () => {

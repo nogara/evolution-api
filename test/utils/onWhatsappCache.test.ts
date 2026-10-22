@@ -217,6 +217,66 @@ describe('saveOnWhatsappCache', () => {
     expect(isOnWhatsapp.create).not.toHaveBeenCalled();
   });
 
+  it('updates when only the lid flag changes', async () => {
+    isOnWhatsapp.findFirst.mockResolvedValue({
+      id: 'r1',
+      remoteJid: '5511987654321@s.whatsapp.net',
+      jidOptions: '5511987654321@s.whatsapp.net,551187654321@s.whatsapp.net',
+      lid: null,
+    });
+
+    await saveOnWhatsappCache([{ remoteJid: '5511987654321@s.whatsapp.net', lid: 'lid' }]);
+
+    expect(isOnWhatsapp.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: {
+        remoteJid: '5511987654321@s.whatsapp.net',
+        jidOptions: '551187654321@s.whatsapp.net,5511987654321@s.whatsapp.net',
+        lid: 'lid',
+      },
+    });
+  });
+
+  it('updates when only the remote jid changes', async () => {
+    isOnWhatsapp.findFirst.mockResolvedValue({
+      id: 'r1',
+      remoteJid: '551187654321@s.whatsapp.net',
+      jidOptions: '5511987654321@s.whatsapp.net,551187654321@s.whatsapp.net',
+      lid: null,
+    });
+
+    await saveOnWhatsappCache([{ remoteJid: '5511987654321@s.whatsapp.net' }]);
+
+    expect(isOnWhatsapp.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: {
+        remoteJid: '5511987654321@s.whatsapp.net',
+        jidOptions: '551187654321@s.whatsapp.net,5511987654321@s.whatsapp.net',
+        lid: null,
+      },
+    });
+  });
+
+  it('updates an existing record without jid options with the expanded options', async () => {
+    isOnWhatsapp.findFirst.mockResolvedValue({
+      id: 'r1',
+      remoteJid: '5511987654321@s.whatsapp.net',
+      jidOptions: null,
+      lid: null,
+    });
+
+    await saveOnWhatsappCache([{ remoteJid: '5511987654321@s.whatsapp.net' }]);
+
+    expect(isOnWhatsapp.update).toHaveBeenCalledWith({
+      where: { id: 'r1' },
+      data: {
+        remoteJid: '5511987654321@s.whatsapp.net',
+        jidOptions: '551187654321@s.whatsapp.net,5511987654321@s.whatsapp.net',
+        lid: null,
+      },
+    });
+  });
+
   it('KNOWN BUG: merges a jid option with the domain appended twice into the update (current behavior)', async () => {
     isOnWhatsapp.findFirst.mockResolvedValue({
       id: 'r1',

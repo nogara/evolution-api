@@ -24,6 +24,14 @@ describe('advancedOperatorsSearch', () => {
     expect(advancedOperatorsSearch('Ação rápida', 'exact:acao')).toBe(false);
   });
 
+  it('strips accents from the query value', () => {
+    expect(advancedOperatorsSearch('acao', 'contains:Ação')).toBe(true);
+  });
+
+  it('returns false for an empty query', () => {
+    expect(advancedOperatorsSearch('hello', '')).toBe(false);
+  });
+
   it('accepts operator names in any case', () => {
     expect(advancedOperatorsSearch('hello', 'CONTAINS:ell')).toBe(true);
   });

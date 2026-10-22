@@ -1,4 +1,4 @@
-import { initAuthCreds, proto } from 'baileys';
+import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createCacheService, InMemoryRedisCache } from '../helpers/cache';
@@ -136,10 +136,11 @@ describe('useMultiFileAuthStateRedisDb', () => {
     expect(loggersNamed('useMultiFileAuthStateRedisDb')[0].error).not.toHaveBeenCalled();
   });
 
-  it('keeps the initial creds object when a fresh instance has nothing stored', async () => {
-    const fresh = initAuthCreds();
-    const { state } = await open();
+  it('does not persist fresh creds on open, unlike the prisma store', async () => {
+    const hSet = vi.spyOn(cache, 'hSet');
 
-    expect(Object.keys(state.creds).sort()).toEqual(Object.keys(fresh).sort());
+    await open();
+
+    expect(hSet).not.toHaveBeenCalled();
   });
 });

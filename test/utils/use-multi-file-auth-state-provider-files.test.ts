@@ -1,7 +1,7 @@
 import { proto } from 'baileys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { loggers } from '../helpers/logger';
+import { loggers, loggersNamed } from '../helpers/logger';
 
 vi.mock('@config/logger.config', async () => (await import('../helpers/logger')).loggerModule);
 
@@ -148,7 +148,11 @@ describe('AuthStateProvider', () => {
 
     expect(providerFiles.removeSession).toHaveBeenCalledWith('instance');
     expect(providerFiles.files.size).toBe(0);
-    expect(loggers.some((logger) => logger.info.mock.calls.length > 0)).toBe(true);
+    expect(loggersNamed('useMultiFileAuthStatePrisma')[0].info).toHaveBeenCalledWith({
+      action: 'remove.session',
+      instance: 'instance',
+      response: { status: 200, data: 'removed' },
+    });
   });
 
   it('returns undefined and logs when the session folder cannot be created', async () => {
@@ -158,7 +162,11 @@ describe('AuthStateProvider', () => {
     const result = await open();
 
     expect(result).toBeUndefined();
-    expect(loggers.some((logger) => logger.error.mock.calls.length > 0)).toBe(true);
+    expect(loggersNamed('AuthStateProvider').at(-1).error).toHaveBeenCalledWith([
+      'Failed to create folder on file server',
+      'provider offline',
+      error.stack,
+    ]);
   });
 
   it('KNOWN BUG: swallows read, write and delete errors without logging them (current behavior)', async () => {

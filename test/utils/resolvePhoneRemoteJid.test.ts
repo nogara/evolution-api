@@ -28,6 +28,18 @@ describe('resolvePhoneRemoteJid', () => {
     );
   });
 
+  it('KNOWN BUG: replaces a remoteJid that contains @lid outside the suffix (current behavior)', () => {
+    expect(resolvePhoneRemoteJid({ remoteJid: 'x@lid.example', remoteJidAlt: '5492616841080@s.whatsapp.net' })).toBe(
+      '5492616841080@s.whatsapp.net',
+    );
+  });
+
+  it.fails('keeps a remoteJid that contains @lid outside the suffix', () => {
+    expect(resolvePhoneRemoteJid({ remoteJid: 'x@lid.example', remoteJidAlt: '5492616841080@s.whatsapp.net' })).toBe(
+      'x@lid.example',
+    );
+  });
+
   it('returns undefined when there is no remoteJid', () => {
     expect(resolvePhoneRemoteJid({ remoteJidAlt: '5492616841080@s.whatsapp.net' })).toBeUndefined();
   });

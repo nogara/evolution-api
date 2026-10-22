@@ -1,28 +1,41 @@
 import { findBotByTrigger } from '@utils/findBotByTrigger';
 import { describe, expect, it, vi } from 'vitest';
 
-type Bot = { id: string; triggerType: string; triggerOperator?: string; triggerValue?: string };
+type Bot = {
+  id: string;
+  triggerType: string;
+  triggerOperator?: string;
+  triggerValue?: string;
+  enabled?: boolean;
+  instanceId?: string;
+};
 
-const createRepository = (bots: Bot[]) => ({
-  findFirst: vi.fn(async ({ where }) => {
-    if (where.triggerType?.in) return bots.find((bot) => where.triggerType.in.includes(bot.triggerType)) ?? null;
-    return (
-      bots.find(
+const createRepository = (seed: Bot[]) => {
+  const bots = seed.map((bot) => ({ enabled: true, instanceId: 'inst', ...bot }));
+  const scoped = (where: any) =>
+    bots.filter((bot) => bot.enabled === where.enabled && bot.instanceId === where.instanceId);
+  return {
+    findFirst: vi.fn(async ({ where }) => {
+      if (where.triggerType?.in)
+        return scoped(where).find((bot) => where.triggerType.in.includes(bot.triggerType)) ?? null;
+      return (
+        scoped(where).find(
+          (bot) =>
+            bot.triggerType === where.triggerType &&
+            bot.triggerOperator === where.triggerOperator &&
+            bot.triggerValue === where.triggerValue,
+        ) ?? null
+      );
+    }),
+    findMany: vi.fn(async ({ where }) =>
+      scoped(where).filter(
         (bot) =>
           bot.triggerType === where.triggerType &&
-          bot.triggerOperator === where.triggerOperator &&
-          bot.triggerValue === where.triggerValue,
-      ) ?? null
-    );
-  }),
-  findMany: vi.fn(async ({ where }) =>
-    bots.filter(
-      (bot) =>
-        bot.triggerType === where.triggerType &&
-        (where.triggerOperator === undefined || bot.triggerOperator === where.triggerOperator),
+          (where.triggerOperator === undefined || bot.triggerOperator === where.triggerOperator),
+      ),
     ),
-  ),
-});
+  };
+};
 
 describe('findBotByTrigger', () => {
   it('returns a bot with trigger type all before any other bot', async () => {
@@ -31,7 +44,21 @@ describe('findBotByTrigger', () => {
       { id: 'all', triggerType: 'all' },
     ]);
 
-    expect(await findBotByTrigger(repository, 'hi', 'inst')).toEqual({ id: 'all', triggerType: 'all' });
+    expect(await findBotByTrigger(repository, 'hi', 'inst')).toMatchObject({ id: 'all', triggerType: 'all' });
+  });
+
+  it('ignores disabled bots and bots from other instances', async () => {
+    const repository = createRepository([
+      { id: 'off', triggerType: 'all', enabled: false },
+      { id: 'other', triggerType: 'all', instanceId: 'inst-2' },
+      { id: 'adv-off', triggerType: 'advanced', triggerValue: 'contains:hi', enabled: false },
+      { id: 'eq-other', triggerType: 'keyword', triggerOperator: 'equals', triggerValue: 'hi', instanceId: 'inst-2' },
+      { id: 'ct-off', triggerType: 'keyword', triggerOperator: 'contains', triggerValue: 'h', enabled: false },
+      { id: 'ct', triggerType: 'keyword', triggerOperator: 'contains', triggerValue: 'i' },
+    ]);
+
+    expect((await findBotByTrigger(repository, 'hi', 'inst'))?.id).toBe('ct');
+    expect(await findBotByTrigger(repository, 'hi', 'inst-3')).toBeNull();
   });
 
   it('returns a bot with trigger type none', async () => {

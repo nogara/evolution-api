@@ -138,6 +138,30 @@ describe('getConversationMessage', () => {
     ).toBe('u1');
   });
 
+  it('falls back to view once video and audio urls', () => {
+    expect(
+      getConversationMessage({ key, message: { viewOnceMessageV2: { message: { videoMessage: { url: 'v1' } } } } }),
+    ).toBe('v1');
+    expect(
+      getConversationMessage({ key, message: { viewOnceMessageV2: { message: { audioMessage: { url: 'a1' } } } } }),
+    ).toBe('a1');
+  });
+
+  it('falls back to a top level list response title', () => {
+    expect(getConversationMessage({ key, message: {}, listResponseMessage: { title: 'Top' } })).toBe('Top');
+  });
+
+  it('uses the key id when S3 is enabled and a view once video is present without video saving', () => {
+    s3.ENABLE = true;
+
+    expect(
+      getConversationMessage({
+        key,
+        message: { viewOnceMessageV2: { message: { videoMessage: {} } }, audioMessage: {}, mediaUrl: 'https://s3/a' },
+      }),
+    ).toBe('audioMessage|MSG1');
+  });
+
   it('appends the external ad reply body on a new line', () => {
     expect(
       getConversationMessage({

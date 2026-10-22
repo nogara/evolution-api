@@ -139,6 +139,14 @@ describe('useMultiFileAuthStatePrisma', () => {
     });
   });
 
+  it('maps slashes in key names to double underscores in local file paths', async () => {
+    const { state } = await open();
+
+    await state.keys.set({ session: { 'a/b': Buffer.from([1]) } });
+
+    expect([...files.keys()]).toContain('/instances/session/session-a__b.json');
+  });
+
   it('KNOWN BUG: leaves local key files behind on removeCreds without redis (current behavior)', async () => {
     const { state, removeCreds } = await open();
     await state.keys.set({ session: { a: Buffer.from([1]) } });
