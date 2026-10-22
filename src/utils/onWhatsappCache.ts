@@ -12,7 +12,7 @@ function getAvailableNumbers(remoteJid: string) {
     remoteJid = remoteJid.slice(1);
   }
 
-  const [number, domain] = remoteJid.split('@');
+  const [number, domain = 's.whatsapp.net'] = remoteJid.split('@');
 
   // TODO: Se já for @lid, retornar apenas ele mesmo SEM adicionar @domain novamente
   if (domain === 'lid' || domain === 'g.us') {
@@ -52,7 +52,7 @@ function getAvailableNumbers(remoteJid: string) {
 
   // Other countries
   else {
-    numbersAvailable.push(remoteJid);
+    numbersAvailable.push(number);
   }
 
   // TODO: Adiciona @domain apenas para números que não são @lid
