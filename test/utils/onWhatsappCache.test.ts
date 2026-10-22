@@ -280,3 +280,59 @@ describe('saveOnWhatsappCache', () => {
     expect(isOnWhatsapp.create).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('saveOnWhatsappCache with concurrent writers', () => {
+  const rows: { id: string; remoteJid: string; jidOptions: string; lid: string | null }[] = [];
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  const uniqueViolation = () =>
+    Object.assign(new Error('Unique constraint failed on the fields: (`remoteJid`)'), { code: 'P2002' });
+
+  beforeEach(() => {
+    rows.length = 0;
+    mocks.database.SAVE_DATA.IS_ON_WHATSAPP = true;
+    isOnWhatsapp.findFirst.mockImplementation(async ({ where }) => {
+      await tick();
+      return (
+        rows.find((row) =>
+          where.OR.some((clause: any) =>
+            clause.remoteJid ? row.remoteJid === clause.remoteJid : row.jidOptions.includes(clause.jidOptions.contains),
+          ),
+        ) ?? null
+      );
+    });
+    isOnWhatsapp.create.mockImplementation(async ({ data }) => {
+      await tick();
+      if (rows.some((row) => row.remoteJid === data.remoteJid)) throw uniqueViolation();
+      const row = { id: `row-${rows.length}`, ...data };
+      rows.push(row);
+      return row;
+    });
+    isOnWhatsapp.update.mockImplementation(async ({ where, data }) => {
+      await tick();
+      const row = rows.find((candidate) => candidate.id === where.id);
+      Object.assign(row, data);
+      return row;
+    });
+  });
+
+  it('saves a jid repeated in one batch as a single record without errors', async () => {
+    await saveOnWhatsappCache([
+      { remoteJid: '5491123456789@s.whatsapp.net' },
+      { remoteJid: '5491123456789@s.whatsapp.net', remoteJidAlt: '999@lid' },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].jidOptions.split(',')).toContain('999@lid');
+  });
+
+  it('saves the same jid from concurrent calls as a single record', async () => {
+    await Promise.all([
+      saveOnWhatsappCache([{ remoteJid: '5491123456789@s.whatsapp.net' }]),
+      saveOnWhatsappCache([{ remoteJid: '5491123456789@s.whatsapp.net', remoteJidAlt: '999@lid' }]),
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].jidOptions.split(',')).toContain('999@lid');
+  });
+});
