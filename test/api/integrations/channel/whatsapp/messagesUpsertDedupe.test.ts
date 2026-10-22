@@ -112,6 +112,19 @@ describe('messages.upsert dedupe', () => {
     expect(upsertWebhooks(service)).toHaveLength(1);
   });
 
+  it('processes each recipient copy of a broadcast once', async () => {
+    const { service, prismaRepository } = buildService();
+    const recipients = ['5491111111111@s.whatsapp.net', '5492222222222@s.whatsapp.net', '5493333333333@s.whatsapp.net'];
+
+    for (const remoteJid of recipients) {
+      await deliver(service, message({ remoteJid, fromMe: true }));
+    }
+    await deliver(service, message({ remoteJid: recipients[1], fromMe: true }));
+
+    expect(prismaRepository.message.create).toHaveBeenCalledTimes(3);
+    expect(upsertWebhooks(service)).toHaveLength(3);
+  });
+
   it('processes the phone delivery again when the first lid delivery had no phone', async () => {
     const { service, prismaRepository } = buildService();
 

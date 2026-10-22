@@ -83,14 +83,7 @@ import { Instance, Message } from '@prisma/client';
 import { createJid } from '@utils/createJid';
 import { fetchLatestWaWebVersion } from '@utils/fetchLatestWaWebVersion';
 import { makeProxyAgent, makeProxyAgentUndici } from '@utils/makeProxyAgent';
-import {
-  MESSAGE_DEDUPE_TTL_SECONDS,
-  messageDedupeKey,
-  MessageDedupeKeyInput,
-  MessageDedupeMark,
-  messageDedupeMark,
-  shouldProcessMessage,
-} from '@utils/messageDedupe';
+import { MESSAGE_DEDUPE_TTL_SECONDS, messageDedupeKey, MessageDedupeKeyInput } from '@utils/messageDedupe';
 import { getOnWhatsappCache, saveOnWhatsappCache } from '@utils/onWhatsappCache';
 import { status } from '@utils/renderStatus';
 import { resolvePhoneRemoteJid } from '@utils/resolvePhoneRemoteJid';
@@ -969,8 +962,7 @@ export class BaileysStartupService extends ChannelStartupService {
     }
 
     try {
-      const seen = await this.baileysCache.get(messageDedupeKey(this.instanceId, key));
-      return !shouldProcessMessage(seen, key);
+      return Boolean(await this.baileysCache.get(messageDedupeKey(this.instanceId, key)));
     } catch (error) {
       this.logger.warn(`Message dedupe lookup failed, processing message: ${error?.message}`);
       return false;
@@ -983,11 +975,7 @@ export class BaileysStartupService extends ChannelStartupService {
     }
 
     try {
-      await this.baileysCache.set(
-        messageDedupeKey(this.instanceId, key),
-        messageDedupeMark(key),
-        MESSAGE_DEDUPE_TTL_SECONDS,
-      );
+      await this.baileysCache.set(messageDedupeKey(this.instanceId, key), 1, MESSAGE_DEDUPE_TTL_SECONDS);
     } catch (error) {
       this.logger.warn(`Message dedupe mark failed: ${error?.message}`);
     }
@@ -1066,7 +1054,7 @@ export class BaileysStartupService extends ChannelStartupService {
         }
 
         const messagesRaw: any[] = [];
-        const seenInBatch = new Map<string, MessageDedupeMark>();
+        const seenInBatch = new Set<string>();
 
         const messagesRepository: Set<string> = new Set(
           chatwootImport.getRepositoryMessagesCache(instance) ??
@@ -1104,13 +1092,13 @@ export class BaileysStartupService extends ChannelStartupService {
           const batchDedupeKey = m.key.id ? messageDedupeKey(this.instanceId, m.key) : undefined;
           if (
             messagesRepository?.has(m.key.id) ||
-            (batchDedupeKey && !shouldProcessMessage(seenInBatch.get(batchDedupeKey), m.key)) ||
+            (batchDedupeKey && seenInBatch.has(batchDedupeKey)) ||
             (await this.isDuplicateMessage(m.key))
           ) {
             continue;
           }
           if (batchDedupeKey) {
-            seenInBatch.set(batchDedupeKey, messageDedupeMark(m.key));
+            seenInBatch.add(batchDedupeKey);
           }
 
           if (!m.pushName && !m.key.fromMe) {
