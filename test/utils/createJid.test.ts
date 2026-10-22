@@ -43,8 +43,9 @@ describe('createJid', () => {
     expect(createJid('12036301234567890')).toBe('12036301234567890@s.whatsapp.net');
   });
 
-  it('KNOWN BUG: removes the third digit from 13 digit Argentine numbers (current behavior)', () => {
-    expect(createJid('5492616107398')).toBe('542616107398@s.whatsapp.net');
+  it('keeps the mobile 9 in 13 digit Argentine numbers', () => {
+    expect(createJid('5492616107398')).toBe('5492616107398@s.whatsapp.net');
+    expect(createJid('+54 9 261 610-7398')).toBe('5492616107398@s.whatsapp.net');
   });
 
   it('KNOWN BUG: removes the third digit from 13 digit Mexican numbers (current behavior)', () => {
