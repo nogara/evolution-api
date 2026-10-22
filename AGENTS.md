@@ -31,8 +31,9 @@ and **stenfar**. Anything they consume is a public contract.
 ## Commands & danger zones
 
 - **Local / safe:** `npm run dev:server` (tsx watch), `npm start`, `npm run build` (`tsc --noEmit && tsup`),
-  `npm run lint:check`, `npx tsc --noEmit`, `make check-docs`, `npm run db:generate`,
-  `docker-compose -f docker-compose.dev.yaml up -d`.
+  `npm test` (Vitest, `test/**/*.test.ts`), `npm run lint:check` (src + test), `npx tsc --noEmit`,
+  `npm run typecheck:test` (src + test + `vitest.config.ts`), `make check-docs`,
+  `npm run db:generate`, `docker-compose -f docker-compose.dev.yaml up -d`.
 - **Database:** always `export DATABASE_PROVIDER=postgresql` (or `mysql`) first. `npm run db:migrate:dev`
   only against a local database. Every schema change ships migrations for BOTH providers.
 - **PROD — never without explicit user approval:** `npm run db:deploy`, image publish workflows, any deploy,
@@ -117,10 +118,13 @@ ODD (gentle-ai) is the workflow; its protocol is not repeated here. What this re
 
 ## Verification
 
-There is no test suite yet (`npm test` is an upstream placeholder). Before handing off a change, run:
+Unit tests use Vitest and live in `test/`, mirroring `src/` (e.g. `test/utils/createJid.test.ts`). They cover
+how our code processes data; Baileys is mocked where it touches the socket. Before handing off a change, run:
 
 ```bash
+npm test
 npx tsc --noEmit
+npm run typecheck:test
 npm run build
 npm run lint:check
 make check-docs      # docs drift guard (pointers, skill frontmatter)
@@ -128,6 +132,11 @@ make check-docs      # docs drift guard (pointers, skill frontmatter)
 
 Behavior that needs a real WhatsApp account (pairing, sending, receiving) requires a human with a phone;
 report it as unverified rather than faking it. When tests are added, they ship with the behavior.
+
+Known bugs in tests: a test that pins buggy behavior is named `it('KNOWN BUG: <what is wrong> (current behavior)')`
+and sits next to an `it.fails('<correct contract>')` asserting the intended behavior. When you fix the bug, the
+`it.fails` starts failing; replace both with one normal test for the correct contract. Skip the `it.fails` only when
+the correct contract is unclear (e.g. Argentine/Mexican numbers in `createJid`).
 
 ## Documentation conventions
 

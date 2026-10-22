@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v5
         with:
-          node-version: 20.x
+          node-version: 24.x
           cache: npm
 
       - name: Install packages
@@ -31,11 +31,17 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Typecheck tests
+        run: npm run typecheck:test
+
       - name: Build
         run: npm run build
 
       - name: Lint
         run: npm run lint:check
+
+      - name: Unit tests
+        run: npm test
 
       - name: Check docs
         run: bash scripts/check-docs.sh
