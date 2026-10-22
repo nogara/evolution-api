@@ -171,6 +171,17 @@ describe('messages.upsert dedupe', () => {
     expect(storedHistoryRows(prismaRepository)).toHaveLength(1);
   });
 
+  it('keeps the phone copy of a history message whose lid copy had no phone', async () => {
+    const { service, prismaRepository } = buildService();
+
+    await syncHistory(service, [
+      message({ remoteJid: '123456789@lid' }),
+      message({ remoteJid: '5491123456789@s.whatsapp.net' }),
+    ]);
+
+    expect(storedHistoryRows(prismaRepository)).toHaveLength(2);
+  });
+
   it('skips a live redelivery of a message stored by history sync', async () => {
     const { service, prismaRepository } = buildService();
     const received = message({ remoteJid: '5491123456789@s.whatsapp.net' });

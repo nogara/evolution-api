@@ -87,6 +87,7 @@ import {
   MESSAGE_DEDUPE_TTL_SECONDS,
   messageDedupeKey,
   MessageDedupeKeyInput,
+  MessageDedupeMark,
   messageDedupeMark,
   shouldProcessMessage,
 } from '@utils/messageDedupe';
@@ -1065,7 +1066,7 @@ export class BaileysStartupService extends ChannelStartupService {
         }
 
         const messagesRaw: any[] = [];
-        const seenInBatch = new Set<string>();
+        const seenInBatch = new Map<string, MessageDedupeMark>();
         const storedKeys: proto.IMessageKey[] = [];
 
         const messagesRepository: Set<string> = new Set(
@@ -1104,13 +1105,13 @@ export class BaileysStartupService extends ChannelStartupService {
           const batchDedupeKey = m.key.id ? messageDedupeKey(this.instanceId, m.key) : undefined;
           if (
             messagesRepository?.has(m.key.id) ||
-            (batchDedupeKey && seenInBatch.has(batchDedupeKey)) ||
+            (batchDedupeKey && !shouldProcessMessage(seenInBatch.get(batchDedupeKey), m.key)) ||
             (await this.isDuplicateMessage(m.key))
           ) {
             continue;
           }
           if (batchDedupeKey) {
-            seenInBatch.add(batchDedupeKey);
+            seenInBatch.set(batchDedupeKey, messageDedupeMark(m.key));
           }
 
           if (!m.pushName && !m.key.fromMe) {
