@@ -244,3 +244,70 @@ index 0f4ff1c..1d29fe6 100644
                  const { imageMessage } = await prepareWAMessageMedia({ image: { url: image } }, {
                      upload: opts.uploadImage,
                      mediaTypeOverride: 'thumbnail-link',
+diff --git a/node_modules/baileys/lib/Utils/process-message.js b/node_modules/baileys/lib/Utils/process-message.js
+index 37449db..678f3d3 100644
+--- a/node_modules/baileys/lib/Utils/process-message.js
++++ b/node_modules/baileys/lib/Utils/process-message.js
+@@ -2,7 +2,7 @@ import { Boom } from '@hapi/boom';
+ import { proto } from '../../WAProto/index.js';
+ import { WAMessageStubType } from '../Types/index.js';
+ import { getContentType, normalizeMessageContent } from '../Utils/messages.js';
+-import { areJidsSameUser, isHostedLidUser, isHostedPnUser, isJidBroadcast, isJidStatusBroadcast, isLidUser, jidDecode, jidEncode, jidNormalizedUser } from '../WABinary/index.js';
++import { areJidsSameUser, isHostedLidUser, isHostedPnUser, isJidBroadcast, isJidStatusBroadcast, isLidUser, isPnUser, jidDecode, jidEncode, jidNormalizedUser } from '../WABinary/index.js';
+ import { aesDecryptGCM, hmacSign } from './crypto.js';
+ import { getKeyAuthor, toNumber } from './generics.js';
+ import { downloadAndProcessHistorySyncNotification } from './history.js';
+@@ -183,6 +183,16 @@ export function decryptEventResponse({ encPayload, encIv }, { eventCreatorJid, e
+         return Buffer.from(txt);
+     }
+ }
++const parseStubParticipant = (parameter) => {
++    try {
++        const parsed = JSON.parse(parameter);
++        if (parsed && typeof parsed === 'object') {
++            return parsed;
++        }
++    }
++    catch { }
++    return isPnUser(parameter) ? { id: parameter, phoneNumber: parameter } : { id: parameter };
++};
+ const processMessage = async (message, { shouldProcessHistoryMsg, placeholderResendCache, ev, creds, signalRepository, keyStore, logger, options, getMessage }) => {
+     const meId = creds.me.id;
+     const { accountSettings } = creds;
+@@ -507,12 +517,12 @@ const processMessage = async (message, { shouldProcessHistoryMsg, placeholderRes
+         const participantsIncludesMe = () => participants.find(jid => areJidsSameUser(meId, jid.phoneNumber)); // ADD SUPPORT FOR LID
+         switch (message.messageStubType) {
+             case WAMessageStubType.GROUP_PARTICIPANT_CHANGE_NUMBER:
+-                participants = message.messageStubParameters.map((a) => JSON.parse(a)) || [];
++                participants = message.messageStubParameters.map(parseStubParticipant) || [];
+                 emitParticipantsUpdate('modify');
+                 break;
+             case WAMessageStubType.GROUP_PARTICIPANT_LEAVE:
+             case WAMessageStubType.GROUP_PARTICIPANT_REMOVE:
+-                participants = message.messageStubParameters.map((a) => JSON.parse(a)) || [];
++                participants = message.messageStubParameters.map(parseStubParticipant) || [];
+                 emitParticipantsUpdate('remove');
+                 // mark the chat read only if you left the group
+                 if (participantsIncludesMe()) {
+@@ -522,18 +532,18 @@ const processMessage = async (message, { shouldProcessHistoryMsg, placeholderRes
+             case WAMessageStubType.GROUP_PARTICIPANT_ADD:
+             case WAMessageStubType.GROUP_PARTICIPANT_INVITE:
+             case WAMessageStubType.GROUP_PARTICIPANT_ADD_REQUEST_JOIN:
+-                participants = message.messageStubParameters.map((a) => JSON.parse(a)) || [];
++                participants = message.messageStubParameters.map(parseStubParticipant) || [];
+                 if (participantsIncludesMe()) {
+                     chat.readOnly = false;
+                 }
+                 emitParticipantsUpdate('add');
+                 break;
+             case WAMessageStubType.GROUP_PARTICIPANT_DEMOTE:
+-                participants = message.messageStubParameters.map((a) => JSON.parse(a)) || [];
++                participants = message.messageStubParameters.map(parseStubParticipant) || [];
+                 emitParticipantsUpdate('demote');
+                 break;
+             case WAMessageStubType.GROUP_PARTICIPANT_PROMOTE:
+-                participants = message.messageStubParameters.map((a) => JSON.parse(a)) || [];
++                participants = message.messageStubParameters.map(parseStubParticipant) || [];
+                 emitParticipantsUpdate('promote');
+                 break;
+             case WAMessageStubType.GROUP_CHANGE_ANNOUNCE:
