@@ -361,3 +361,29 @@ describe('saveOnWhatsappCache with concurrent writers', () => {
     expect(rows.map((row) => row.remoteJid)).toEqual(['5491187654321@s.whatsapp.net']);
   });
 });
+
+describe('saveOnWhatsappCache concurrency', () => {
+  beforeEach(() => {
+    mocks.database.SAVE_DATA.IS_ON_WHATSAPP = true;
+  });
+
+  it('never runs more than ten items against the database at once', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    isOnWhatsapp.findFirst.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      inFlight -= 1;
+      return null;
+    });
+    isOnWhatsapp.create.mockResolvedValue({});
+    const items = Array.from({ length: 100 }, (_, index) => ({ remoteJid: `1555000${index}@s.whatsapp.net` }));
+
+    await saveOnWhatsappCache(items);
+
+    expect(isOnWhatsapp.create).toHaveBeenCalledTimes(100);
+    expect(peak).toBeGreaterThan(1);
+    expect(peak).toBeLessThanOrEqual(10);
+  });
+});
