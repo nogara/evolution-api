@@ -3,7 +3,7 @@ name: Purple Checks
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, nogara/stable]
 
 permissions:
   contents: read

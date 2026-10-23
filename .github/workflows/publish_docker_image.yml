@@ -10,6 +10,7 @@ on:
 jobs:
   build_deploy:
     name: Build and Deploy
+    if: github.repository == 'purple-dice/evolution-in-purple'
     runs-on: ubuntu-latest
     permissions:
       contents: read
