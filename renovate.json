@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "baseBranches": [
+    "nogara/stable"
+  ],
+  "enabledManagers": [
+    "dockerfile",
+    "github-actions"
+  ],
+  "dependencyDashboard": true,
+  "packageRules": [
+    {
+      "description": "Stay on the Node.js 24 LTS line; a new major is a deliberate migration",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
+      "allowedVersions": "/^24\\./"
+    },
+    {
+      "description": "Group both Dockerfile stages into one PR",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "groupName": "node base image"
+    },
+    {
+      "description": "Base image digest and patch bumps merge on green smoke test",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchUpdateTypes": [
+        "digest",
+        "patch",
+        "pin"
+      ],
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": [
+      "security"
+    ]
+  }
+}
