@@ -44,4 +44,15 @@ describe('processMessage group stub parameters', () => {
     expect(updates).toHaveLength(1);
     expect(updates[0]).toMatchObject({ action: 'add', participants: [participant] });
   });
+
+  it('reads plain phone jids as the participant phone number', async () => {
+    const updates = await run(
+      groupStub(WAMessageStubType.GROUP_PARTICIPANT_REMOVE, ['5491100000000@s.whatsapp.net', '12345']),
+    );
+
+    expect(updates[0].participants).toEqual([
+      { id: '5491100000000@s.whatsapp.net', phoneNumber: '5491100000000@s.whatsapp.net' },
+      { id: '12345' },
+    ]);
+  });
 });
