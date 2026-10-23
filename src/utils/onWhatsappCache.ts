@@ -163,6 +163,8 @@ async function saveOnWhatsappCacheItem(item: ISaveOnWhatsappCacheParams) {
   }
 }
 
+const SAVE_CONCURRENCY = 10;
+
 const isUniqueConstraintError = (error: unknown) => (error as { code?: string })?.code === 'P2002';
 
 async function saveOnWhatsappCacheItemWithRetry(item: ISaveOnWhatsappCacheParams) {
@@ -181,19 +183,19 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
     return;
   }
 
-  // Processa todos os itens em paralelo para melhor performance
-  const processingPromises = data.map(async (item) => {
-    try {
-      await saveOnWhatsappCacheItemWithRetry(item);
-    } catch (e) {
-      // Loga o erro mas não para a execução dos outros promises
-      logger.error(`[saveOnWhatsappCache] Error processing item for ${item.remoteJid}: `);
-      logger.error(e);
+  const items = data.values();
+  const worker = async () => {
+    for (const item of items) {
+      try {
+        await saveOnWhatsappCacheItemWithRetry(item);
+      } catch (e) {
+        logger.error(`[saveOnWhatsappCache] Error processing item for ${item?.remoteJid}: `);
+        logger.error(e);
+      }
     }
-  });
+  };
 
-  // Espera todas as operações paralelas terminarem
-  await Promise.allSettled(processingPromises);
+  await Promise.all(Array.from({ length: Math.min(SAVE_CONCURRENCY, data.length) }, worker));
 }
 
 export async function getOnWhatsappCache(remoteJids: string[]) {
