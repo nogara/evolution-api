@@ -60,9 +60,17 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Verify Node.js version per platform
+        env:
+          INDEX_DIGEST: ${{ steps.docker_build.outputs.digest }}
         run: |
-          for platform in linux/amd64 linux/arm64; do
-            echo "$platform: $(docker run --rm --platform "$platform" --entrypoint node "${IMAGE}@${{ steps.docker_build.outputs.digest }}" -v)"
+          expected="v$(grep -m1 -oE '^FROM node:[0-9]+\.[0-9]+\.[0-9]+' Dockerfile | sed 's/^FROM node://')"
+          for arch in amd64 arm64; do
+            digest=$(docker buildx imagetools inspect "${IMAGE}@${INDEX_DIGEST}" \
+              --format "{{range .Manifest.Manifests}}{{if eq .Platform.Architecture \"${arch}\"}}{{.Digest}}{{end}}{{end}}")
+            test -n "$digest"
+            actual=$(docker run --rm --platform "linux/${arch}" --entrypoint node "${IMAGE}@${digest}" -v)
+            echo "linux/${arch} ${digest}: expected=${expected} actual=${actual}"
+            test "$actual" = "$expected"
           done
 
       - name: Image digest
