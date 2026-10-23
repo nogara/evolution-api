@@ -1725,6 +1725,7 @@ export class BaileysStartupService extends ChannelStartupService {
               continue;
             }
             message.messageId = findMessage.id;
+            message.remoteJid = message.remoteJid ?? findMessage.key?.remoteJid;
           }
 
           if (update.message === null && update.status === undefined) {
