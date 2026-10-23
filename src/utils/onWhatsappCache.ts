@@ -183,19 +183,20 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
     return;
   }
 
-  const pending = [...data];
+  let nextIndex = 0;
   const worker = async () => {
-    for (let item = pending.shift(); item; item = pending.shift()) {
+    while (nextIndex < data.length) {
+      const item = data[nextIndex++];
       try {
         await saveOnWhatsappCacheItemWithRetry(item);
       } catch (e) {
-        logger.error(`[saveOnWhatsappCache] Error processing item for ${item.remoteJid}: `);
+        logger.error(`[saveOnWhatsappCache] Error processing item for ${item?.remoteJid}: `);
         logger.error(e);
       }
     }
   };
 
-  await Promise.all(Array.from({ length: Math.min(SAVE_CONCURRENCY, pending.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(SAVE_CONCURRENCY, data.length) }, worker));
 }
 
 export async function getOnWhatsappCache(remoteJids: string[]) {

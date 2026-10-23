@@ -386,4 +386,16 @@ describe('saveOnWhatsappCache concurrency', () => {
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(10);
   });
+
+  it('keeps saving the rest of the batch when it contains empty items', async () => {
+    isOnWhatsapp.findFirst.mockResolvedValue(null);
+    isOnWhatsapp.create.mockResolvedValue({});
+    const items = Array.from({ length: 30 }, (_, index) =>
+      index < 10 ? undefined : { remoteJid: `1555000${index}@s.whatsapp.net` },
+    );
+
+    await saveOnWhatsappCache(items as any);
+
+    expect(isOnWhatsapp.create).toHaveBeenCalledTimes(20);
+  });
 });
