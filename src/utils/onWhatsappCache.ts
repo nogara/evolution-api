@@ -183,10 +183,9 @@ export async function saveOnWhatsappCache(data: ISaveOnWhatsappCacheParams[]) {
     return;
   }
 
-  let nextIndex = 0;
+  const items = data.values();
   const worker = async () => {
-    while (nextIndex < data.length) {
-      const item = data[nextIndex++];
+    for (const item of items) {
       try {
         await saveOnWhatsappCacheItemWithRetry(item);
       } catch (e) {
